@@ -4,7 +4,7 @@ CRM comercial da OperumData para prospecção e acompanhamento de parceiros. Pri
 
 ## Estado da entrega
 
-CRM publicado em **https://operumdata-crm.blondseed19.chatgpt.site/**, com acesso privado da hospedagem e Supabase Auth. O projeto Supabase existente `operumdata-crm`, organização OperumData, região Ohio, está conectado. As seis migrations estão aplicadas; as 16 tabelas públicas têm RLS, com 42 políticas. Cadastro público e login anônimo estão desabilitados. O proprietário definiu sua senha e teve a sessão administrativa confirmada.
+Página pública para compartilhar: **https://wdccruz.github.io/operumdata-crm/**. O código está público por autorização do proprietário. O CRM mantém Supabase Auth e RLS; abrir o link não concede acesso aos dados. A instalação privada anterior em **https://operumdata-crm.blondseed19.chatgpt.site/** permanece disponível. O projeto Supabase existente `operumdata-crm`, organização OperumData, região Ohio, está conectado. As seis migrations estão aplicadas; as 16 tabelas públicas têm RLS, com 42 políticas. Cadastro público e login anônimo estão desabilitados. O proprietário definiu sua senha e teve a sessão administrativa confirmada.
 
 Foram aprovadas 13 validações no serviço hospedado, incluindo login, persistência após nova sessão, CRUD, isolamento de agentes, função administrativa e acesso à interface publicada. As contas e registros operacionais sintéticos foram removidos. Os testes offline continuam separados: domínio, PostgreSQL embarcado e navegador com API simulada. Chaves administrativas não fazem parte do frontend ou do repositório.
 
@@ -130,23 +130,23 @@ O teste hospedado não roda automaticamente em CI. Ele lê uma chave de servidor
 
 ## GitHub e publicação
 
-O código está no repositório **privado** [wdccruz/operumdata-crm](https://github.com/wdccruz/operumdata-crm), com `origin` configurado e branch `main` enviada. O Git Credential Manager já tinha autenticação válida; nenhuma credencial foi gravada no checkout.
+O código está no repositório **público** [wdccruz/operumdata-crm](https://github.com/wdccruz/operumdata-crm), por autorização explícita do proprietário. O histórico foi verificado antes da mudança de visibilidade. Dados comerciais, arquivos `.env.local`, senhas e chaves administrativas não foram publicados.
 
-O plano atual da conta rejeitou a ativação de GitHub Pages neste repositório privado (HTTP 422: plano sem suporte). O repositório permanece privado. A hospedagem foi feita com Sites, com acesso privado pelo proprietário: **https://operumdata-crm.blondseed19.chatgpt.site/**. Entre primeiro com a conta ChatGPT proprietária e depois com a conta do CRM. O site não foi tornado público. Para liberar a equipe, conceda acesso de visualizador ao Site e convide cada usuário também no CRM; o RLS continua controlando as atribuições comerciais.
+**Página para compartilhar:** https://wdccruz.github.io/operumdata-crm/
 
-O checkout de publicação é `../operumdata-crm-hosting`, com a identidade persistida em `.openai/hosting.json`: `appgprj_6ae3a65dd0d88191a856955196597deb`. Ele contém apenas o frontend compilado e metadados, sem leads ou credenciais administrativas. Atualizações exigem build com `VITE_BASE_PATH=/`, sincronização dos assets e publicação da versão via habilidade Sites, preservando a audiência privada. Um push ao GitHub sozinho executa CI, mas não atualiza automaticamente este Site.
-
-O workflow executa domínio, PostgreSQL/RLS, navegador, auditoria de produção e build sem depender de um banco externo. Publicação é separada e só roda com `ENABLE_PAGES=true`. Configure essa variável somente depois de resolver o suporte do plano e habilitar Pages com **GitHub Actions**. Em Settings > Secrets and variables > Actions > Variables, configure também `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores públicos do projeto dedicado. Nunca configure `service_role` no GitHub ou frontend.
+O GitHub Pages está habilitado por Actions, com `ENABLE_PAGES=true`. A publicação passou por testes, build e deploy. O HTML e os cinco assets JS/CSS responderam HTTP 200. O caminho-base é `/operumdata-crm/`. As variáveis de build contêm somente a URL e a chave pública do Supabase.
 
 ```text
 git push origin main
 ```
 
-O job Pages continua desabilitado até existir plano compatível e `ENABLE_PAGES=true`. As variáveis públicas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` já foram configuradas no GitHub; não há chave de servidor em Actions. Se Pages for habilitado no futuro, o job compila com base `/operumdata-crm/`. O Site atual foi compilado com base `/`.
+Pushes em `main` executam validação e atualizam Pages automaticamente. Pull requests executam validação sem publicação. Qualquer pessoa pode abrir a tela de entrada; o acesso ao dashboard e aos leads exige usuário ativo e as permissões RLS. O cadastro público continua desabilitado. Publicar o código não torna o banco público.
 
-O endereço local `http://127.0.0.1:5173/operumdata-crm/` permanece disponível enquanto o servidor estiver ativo. O arquivo `.env.local` contém somente URL e chave pública e está ignorado pelo Git. Site URL, redirect permitido e `APP_URL` da função apontam para a origem publicada; os dois redirects locais também permanecem autorizados. A função administrativa usa CORS de produção, portanto faça convites pela URL publicada.
+A instalação Sites anterior continua privada: https://operumdata-crm.blondseed19.chatgpt.site/. A configuração canônica de convites, recuperação e CORS da função administrativa ainda aponta para essa instalação. Nesta publicação de visualização não foram alteradas configurações do Supabase pelo navegador, cuja conexão estava indisponível. Login direto por e-mail/senha usa o mesmo projeto Supabase; para administrar convites, use a instalação privada até atualizar as origens permitidas e os callbacks para Pages.
 
-O convite do proprietário foi entregue pelo serviço padrão de e-mail do Supabase. Antes de convidar prospectores externos, configure SMTP próprio no Supabase: o provedor padrão limita destinatários e volume. Backups, retenção e permissões da equipe devem ser definidos pela OperumData antes de ampliar a operação.
+O checkout da instalação privada é `../operumdata-crm-hosting`, Site `appgprj_6ae3a65dd0d88191a856955196597deb`. Não é atualizado automaticamente pelo push ao GitHub. O endereço local continua `http://127.0.0.1:5173/operumdata-crm/` enquanto o servidor estiver ativo.
+
+Antes de convidar prospectores externos, configure SMTP próprio no Supabase. O serviço padrão limita destinatários e volume. O piloto continua com autenticação e acesso mínimo aos dados.
 
 ## Backup e restauração
 

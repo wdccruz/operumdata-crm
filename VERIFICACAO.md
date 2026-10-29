@@ -54,3 +54,13 @@ O workflow GitHub valida o código; Pages permanece desabilitado. Alterações f
 O acesso do proprietário está pronto. Para a equipe, configurar visualizadores autorizados da hospedagem privada e convites/perfis no CRM. Configurar SMTP próprio no Supabase antes de convidar destinatários externos: o e-mail padrão limita destinatários e volume. Definir política de retenção, backup e testar restauração externa antes de importar base comercial de produção.
 
 Agenda interna é cronológica; CSV importa os campos essenciais; horas gravadas/aceitas têm estrutura preparada, sem ERP ou vídeos. Listagem carrega dados autorizados em lotes, com paginação visual; volumes maiores exigirão agregações e filtros no servidor. Esses limites estão descritos no README.
+
+## Publicação pública autorizada — 29/10/2026
+
+Posteriormente, o proprietário autorizou tornar o código público para compartilhar a página. Repositório confirmado com `private=false`. GitHub Pages habilitado por workflow, `ENABLE_PAGES=true`, mantendo somente variáveis públicas de frontend.
+
+URL: **https://wdccruz.github.io/operumdata-crm/**
+
+A execução https://github.com/wdccruz/operumdata-crm/actions/runs/40952927267 concluiu com `success`, incluindo testes, build e deploy. HTML e todos os cinco assets JS/CSS responderam HTTP 200. Código e histórico foram verificados sem identificação de chaves administrativas literais; dados comerciais continuam no Supabase com RLS e login obrigatório.
+
+A instalação Sites permanece privada. A conexão do navegador não permitiu alterar os callbacks e CORS administrativos do Supabase nesta publicação; estes continuam apontando para Sites. A página Pages pode ser compartilhada para visualização da entrada. Dados internos exigem usuário autorizado. Convites administrativos devem ser feitos pela instalação privada até a atualização das origens/callbacks.
