@@ -30,3 +30,13 @@ Problemas encontrados durante execução foram corrigidos: dependência de teste
 Agenda interna em lista cronológica, não grade mensal. CSV suporta campos essenciais de prospecção, prévia, mapeamento e relatório, sem importação de contratos ou documentos. Leads listados com 25 por página; dados autorizados são buscados em lotes para o volume inicial, com agregação no cliente. Horas gravadas/aceitas têm tabela preparada; sem gestão de vídeo, cobrança ou ERP. Exclusão/anonimização é procedimento administrativo documentado, incluindo snapshots da auditoria. Critérios extras em JSON são referências; novas regras automáticas exigem migração/testes.
 
 O código entrega a base funcional para os 11 critérios de aceite. Login real, persistência pelo serviço hospedado e publicação só podem ser confirmados depois da configuração externa. Instruções detalhadas e comandos estão no README.
+
+## Atualização da publicação — 29/10/2026
+
+O código foi enviado ao repositório **privado** https://github.com/wdccruz/operumdata-crm. O Git Credential Manager local já estava autenticado como `wdccruz`; nenhuma credencial foi copiada para o repositório.
+
+O GitHub rejeitou a criação de Pages com HTTP 422: o plano atual não suporta Pages para este repositório privado. Não tornar o repositório público para contornar a limitação. A validação CI roda independentemente da publicação. O job Pages só será habilitado quando `ENABLE_PAGES=true` for configurado, após resolver a elegibilidade do plano e configurar as variáveis públicas do Supabase.
+
+Nenhum `.env.local`, token CLI Supabase ou projeto vinculado foi encontrado neste checkout. O painel Supabase abriu uma nova autorização de login GitHub, pendente de ação do proprietário. Não há confirmação de banco provisionado, migrations aplicadas ou primeiro administrador no serviço hospedado.
+
+Os testes de interface usam porta 5174 para não conflitar com a instância de desenvolvimento local na porta 5173. Os testes continuam usando uma API simulada, sem inferir sucesso da autenticação de produção.

@@ -1,4 +1,4 @@
-name: Validar e publicar CRM
+name: Validar CRM
 on:
   push:
     branches: [main]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: pages-${{ github.ref }}
+  group: crm-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   validate:
@@ -24,7 +24,19 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
       - run: npm audit --omit=dev
-      - name: Compilar produção
+      - run: npm run build
+  pages-build:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_PAGES == 'true'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Compilar com Supabase configurado
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
@@ -34,12 +46,11 @@ jobs:
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo 'Configure VITE_SUPABASE_ANON_KEY'; exit 1; }
           npm run build
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_PAGES == 'true'
+    needs: pages-build
     runs-on: ubuntu-latest
     permissions:
       pages: write
