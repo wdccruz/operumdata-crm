@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",
+    "i18next": "^26.5.11",
     "lucide-react": "^0.468.0",
     "papaparse": "^5.5.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-i18next": "^17.1.9"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0",

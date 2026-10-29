@@ -22,3 +22,34 @@ export function metrics(s:Store,ids:Set<string>,from='',to=''){
 }
 export function safeCsv(value:unknown){const s=String(value??'');return /^[=+\-@\t\r]/.test(s)?`'${s}`:s;}
 export function googleEvent(m:Row,company:string){const start=new Date(m.starts_at);const compact=(d:Date)=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');return 'https://calendar.google.com/calendar/render?'+new URLSearchParams({action:'TEMPLATE',text:`OperumData — ${company}`,dates:`${compact(start)}/${compact(new Date(start.getTime()+m.duration_minutes*60000))}`,details:m.url||'Reunião comercial'});}
+// ===== V1.1 — Estabelecimentos. Códigos estáveis no banco; rótulos são chaves de tradução. =====
+export const commercialStatuses:[string,string][]=[['registered','Cadastrada'],['potential','Potencial'],['prospecting','Em prospecção'],['qualifying','Em qualificação'],['negotiating','Em negociação'],['awaiting_praxis','Aguardando Praxis'],['stock','Em estoque'],['contracted','Contratada'],['discarded','Descartada']];
+export const operationalStatuses:[string,string][]=[['not_started','Não iniciada'],['awaiting_deployment','Aguardando implantação'],['deploying','Em implantação'],['recording','Gravando'],['paused','Pausada'],['ended','Encerrada']];
+export const importanceLevels:[string,string][]=[['high','Alta'],['medium','Média'],['low','Baixa'],['not_assessed','Não avaliada']];
+export const statusFields:Record<string,[string,string][]>={commercial_status:commercialStatuses,operational_status:operationalStatuses,strategic_importance:importanceLevels};
+export const codeLabel=(list:[string,string][],code?:string)=>list.find(([c])=>c===code)?.[1]??code??'—';
+export const participantBands=['1–2','3–4','5–20','21–40','41 ou mais','Não informado'];
+// Filtros rápidos: "Todas" exibe toda a base, inclusive estoque e descartadas.
+export const quickFilters:[string,string,(c:Row)=>boolean][]=[['all','Todas',()=>true],['potential','Potenciais',c=>c.commercial_status==='potential'],['prospecting','Em prospecção',c=>c.commercial_status==='prospecting'],['stock','Em estoque',c=>c.commercial_status==='stock'],['contracted','Contratadas',c=>c.commercial_status==='contracted'],['recording','Gravando',c=>c.operational_status==='recording'],['paused','Pausadas',c=>c.operational_status==='paused'],['discarded','Descartadas',c=>c.commercial_status==='discarded']];
+/** Próxima ação do estabelecimento: a mais próxima entre a ação da empresa e as tarefas abertas das suas oportunidades. */
+export function companyNext(s:Store,c:Row):{title:string;due_at?:string}|undefined{
+ const opp=new Set(s.opportunities.filter(o=>o.company_id===c.id).map(o=>o.id));
+ const items=[...(c.next_action?[{title:c.next_action,due_at:c.next_action_at||undefined}]:[]),...s.tasks.filter(t=>opp.has(t.opportunity_id)&&!t.done).map(t=>({title:t.title,due_at:t.due_at}))];
+ return items.sort((a,b)=>(a.due_at||'9999').localeCompare(b.due_at||'9999'))[0];
+}
+export type EstablishmentFilter={quick?:string;search?:string;city?:string;state?:string;category?:string;importance?:string;owner?:string;band?:string};
+export function filterEstablishments(s:Store,f:EstablishmentFilter){
+ const q=(f.search||'').trim().toLocaleLowerCase(),qd=digits(q),quick=quickFilters.find(([k])=>k===(f.quick||'all'))?.[2]||(()=>true);
+ return s.companies.filter(c=>{
+  if(!quick(c))return false;
+  if(q){const names=[c.legal_name,c.trade_name].join(' ').toLocaleLowerCase();const nums=[c.cnpj,c.phone,c.whatsapp,...s.contacts.filter(x=>x.company_id===c.id).flatMap(x=>[x.phone,x.whatsapp])].map(v=>digits(v||''));if(!names.includes(q)&&!(qd.length>=3&&nums.some(n=>n.includes(qd))))return false;}
+  return (!f.city||c.city===f.city)&&(!f.state||c.state===f.state)&&(!f.category||c.category_id===f.category)&&(!f.importance||(c.strategic_importance||'not_assessed')===f.importance)&&(!f.owner||c.prospecting_owner===f.owner)&&(!f.band||participantBand(c.participants??undefined)===f.band);
+ }).sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
+}
+/** Indicadores da rede: posição atual de registros reais, sem depender de oportunidade ou contrato. */
+export function networkMetrics(companies:Row[]){
+ const n=(p:(c:Row)=>boolean)=>companies.filter(p).length;
+ return {total:companies.length,potential:n(c=>c.commercial_status==='potential'),stock:n(c=>c.commercial_status==='stock'),contracted:n(c=>c.commercial_status==='contracted'),recording:n(c=>c.operational_status==='recording'),paused:n(c=>c.operational_status==='paused'),high:n(c=>c.strategic_importance==='high')};
+}
+/** Horas aceitas: somente valores efetivamente aceitos, nunca estimados. */
+export function acceptedHours(s:Store,ids:Set<string>,from='',to=''){return s.production.filter(p=>ids.has(p.opportunity_id)&&p.accepted_hours!=null&&(!from||p.recorded_on>=from)&&(!to||p.recorded_on<=to)).reduce((sum,p)=>sum+Number(p.accepted_hours),0)}

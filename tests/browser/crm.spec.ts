@@ -9,7 +9,8 @@ test('fluxo comercial na interface e leitura após recarregar (API simulada)',as
  else if(url.pathname.includes('/auth/v1/user'))body=user;
  else if(url.pathname.includes('/rest/v1/')){
  const table=url.pathname.split('/').pop()!;const rows=tables[table]||[];
- if(request.method()==='POST'){body={id:crypto.randomUUID(),owner_id:uid,actor_id:uid,created_at:new Date().toISOString(),occurred_at:new Date().toISOString(),stage:'Novo',...request.postDataJSON()};rows.push(body);}
+ if(url.pathname.includes('/rpc/set_my_locale')){tables.profiles[0].locale=request.postDataJSON().p_locale;body=tables.profiles[0].locale;}
+ else if(request.method()==='POST'){body={id:crypto.randomUUID(),owner_id:uid,actor_id:uid,created_at:new Date().toISOString(),occurred_at:new Date().toISOString(),stage:'Novo',...(table==='companies'?{commercial_status:'registered',operational_status:'not_started',strategic_importance:'not_assessed',prospecting_owner:uid,updated_at:new Date().toISOString()}:{}),...request.postDataJSON()};rows.push(body);}
  else if(request.method()==='PATCH'){const id=url.searchParams.get('id')?.replace('eq.','');body=rows.find(r=>r.id===id);Object.assign(body,request.postDataJSON());}
  else body=rows;
  }
@@ -18,7 +19,19 @@ test('fluxo comercial na interface e leitura após recarregar (API simulada)',as
  await page.goto('./');await expect(page.getByRole('heading',{name:'Bom trabalho começa aqui.'})).toBeVisible();await page.getByLabel('E-mail corporativo').fill('admin@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();
  await page.screenshot({path:testInfo.outputPath('dashboard.png'),fullPage:true});
  await page.getByRole('button',{name:'Empresa',exact:true}).click();await page.getByLabel('Razão social').fill('Empresa de teste sintética');await page.getByLabel('Cidade',{exact:true}).fill('Cidade de teste');await page.getByLabel('Participantes disponíveis').fill('5');await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
- await page.getByRole('button',{name:'Oportunidade',exact:true}).click();await page.getByLabel('Empresa',{exact:true}).selectOption({label:'Empresa de teste sintética'});await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByRole('heading',{name:'Empresa de teste sintética'})).toBeVisible();
+ // Empresa recém-cadastrada abre sua ficha e já integra Estabelecimentos, sem oportunidade nem contrato.
+ await expect(page.getByRole('heading',{name:'Empresa de teste sintética'})).toBeVisible();await expect(page.getByText('Empresa cadastrada. Ela já integra a base de Estabelecimentos com status Cadastrada.')).toBeVisible();
+ await page.getByRole('button',{name:/Voltar para/}).click();
+ if(testInfo.project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Estabelecimentos',exact:true}).click();
+ const row=page.getByRole('row').filter({hasText:'Empresa de teste sintética'});await expect(row).toBeVisible();await expect(row.getByText('Cadastrada',{exact:true})).toBeVisible();await expect(row.getByText('Não iniciada',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Em estoque',exact:false}).first().click();await expect(page.getByRole('row').filter({hasText:'Empresa de teste sintética'})).toHaveCount(0);await page.getByRole('button',{name:/^Todas/}).click();
+ await page.getByLabel('Pesquisar estabelecimentos').fill('teste sint');await page.getByRole('button',{name:'Empresa de teste sintética',exact:true}).click();
+ await page.getByRole('button',{name:'Alterar status / classificação'}).click();await page.getByLabel('Status comercial',{exact:true}).selectOption({label:'Em estoque'});await page.getByLabel('Motivo da alteração de status').fill('Reserva para campanha futura');await page.getByLabel('Importância estratégica',{exact:true}).selectOption({label:'Alta'});await page.getByLabel('Justificativa da importância').fill('15 participantes e atividades recorrentes');
+ await page.getByLabel('Status operacional',{exact:true}).selectOption({label:'Gravando'});await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('confirme o início efetivo');
+ await page.getByLabel('Status operacional',{exact:true}).selectOption({label:'Não iniciada'});await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+ expect(tables.companies[0]).toMatchObject({commercial_status:'stock',strategic_importance:'high',operational_status:'not_started',status_reason:'Reserva para campanha futura',importance_justification:'15 participantes e atividades recorrentes'});expect(tables.opportunities).toHaveLength(0);expect(tables.contracts).toHaveLength(0);
+ await expect(page.getByText('15 participantes e atividades recorrentes')).toBeVisible();
+ await page.getByRole('button',{name:'Criar oportunidade +'}).first().click();await expect(page.getByLabel('Empresa',{exact:true})).toHaveValue(tables.companies[0].id);await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByText('OPORTUNIDADE / P',{exact:false})).toBeVisible();
  await page.getByRole('button',{name:'Contatos',exact:true}).click();await page.getByRole('button',{name:'Adicionar contato'}).click();await page.getByLabel('Nome',{exact:true}).fill('Decisor sintético');await page.getByLabel('Telefone',{exact:true}).fill('11999990000');await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByText('Decisor sintético',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Registrar ligação',exact:true}).click();await page.getByLabel('Resultado',{exact:true}).selectOption('Interessado');await page.getByLabel('Falou com o decisor').check();await page.getByRole('button',{name:'Salvar registro'}).click();
  await page.getByRole('button',{name:'Programar retorno'}).click();await page.getByLabel('Próxima ação',{exact:true}).fill('Retornar ao decisor');await page.getByLabel('Data de retorno').fill('2026-11-01T10:00');await page.getByRole('button',{name:'Salvar registro'}).click();await expect(page.getByText('Retornar ao decisor',{exact:true})).toBeVisible();
@@ -32,4 +45,54 @@ test('fluxo comercial na interface e leitura após recarregar (API simulada)',as
  await page.reload();await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();
  if(testInfo.project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Leads',exact:true}).click();await page.getByRole('button',{name:'Empresa de teste sintética',exact:true}).click();await expect(page.getByText('Retornar ao decisor',{exact:true})).toBeVisible();await page.screenshot({path:testInfo.outputPath('lead.png'),fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ // Idioma: troca para inglês, grava no perfil e persiste após recarregar.
+ await page.getByRole('button',{name:'EN',exact:true}).click();await expect(page.getByRole('button',{name:'Open establishment'})).toBeVisible();await expect(page.getByRole('button',{name:'Summary',exact:true})).toBeVisible();expect(tables.profiles[0].locale).toBe('en-US');
+ await page.reload();await expect(page.getByRole('heading',{name:'Operations overview'})).toBeVisible();await expect(page.getByText('Establishment network')).toBeVisible();
+ if(testInfo.project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Establishments',exact:true}).click();const enRow=page.getByRole('row').filter({hasText:'Empresa de teste sintética'});await expect(enRow.getByText('In stock',{exact:true})).toBeVisible();await expect(enRow.getByText('High',{exact:true})).toBeVisible();
+ await page.screenshot({path:testInfo.outputPath('establishments-en.png'),fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.getByRole('button',{name:'PT',exact:true}).click();await expect(page.getByRole('button',{name:/^Todas/})).toBeVisible();expect(tables.profiles[0].locale).toBe('pt-BR');
+});
+
+test('praxis_viewer: leitura integral em inglês, sem edição (API simulada)',async({page},testInfo)=>{
+ const vid='00000000-0000-0000-0000-000000000005';
+ const user={id:vid,email:'viewer@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()};
+ const now=new Date().toISOString();
+ const tables:Record<string,any[]>={profiles:[{id:vid,name:'Leitor sintético',role:'praxis_viewer',active:true,locale:'en-US'},{id:uid,name:'Admin sintético',role:'admin',active:true,locale:'pt-BR'}],companies:[{id:'c1',legal_name:'Empresa sintética Praxis',city:'Campinas',state:'SP',participants:15,commercial_status:'contracted',operational_status:'recording',recording_confirmed:true,recording_started_at:now,strategic_importance:'high',importance_justification:'Justificativa sintética',prospecting_owner:uid,created_at:now,updated_at:now,status_changed_at:now}],contacts:[],opportunities:[{id:'o1',company_id:'c1',campaign_id:'campaign',owner_id:uid,stage:'Contrato assinado',priority:1,created_at:now}],activities:[],tasks:[],meetings:[],categories:[],buyers:[{id:'buyer',name:'Praxis Robotics'}],campaigns:[{id:'campaign',buyer_id:'buyer',name:'Campanha sintética',active:true,meeting_minutes:30}],protocols:[],evaluations:[],contracts:[{id:'k1',opportunity_id:'o1',signature_confirmed:true,signed_on:'2026-10-29',reference:'CONTRATO-SINTETICO'}],operations:[],production:[{id:'p1',opportunity_id:'o1',campaign_id:'campaign',recorded_on:'2026-10-29',recorded_hours:4,accepted_hours:3}],audit_log:[],company_status_history:[{id:1,company_id:'c1',field:'commercial_status',old_value:'negotiating',new_value:'contracted',reason:'Contrato sintético',actor_id:uid,changed_at:now}]};
+ const writes:string[]=[];
+ await page.route('https://crm-test.supabase.co/**',async route=>{
+ const request=route.request(),url=new URL(request.url());let body:any=[];
+ if(url.pathname.includes('/auth/v1/token'))body={access_token:'synthetic-access-token',refresh_token:'synthetic-refresh-token',token_type:'bearer',expires_in:3600,user};
+ else if(url.pathname.includes('/auth/v1/user'))body=user;
+ else if(url.pathname.includes('/rest/v1/')){if(['POST','PATCH','PUT','DELETE'].includes(request.method()))writes.push(request.method()+' '+url.pathname);body=tables[url.pathname.split('/').pop()!]||[];}
+ await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(body)});
+ });
+ await page.goto('./');await page.getByLabel('E-mail corporativo').fill('viewer@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();
+ await expect(page.getByRole('heading',{name:'Operations overview'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Company',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Opportunity',exact:true})).toHaveCount(0);
+ const network=page.locator('.metric-grid.network');await expect(network.getByRole('button',{name:/Recording/})).toContainText('1');await expect(network.getByRole('button',{name:/accepted hours/})).toContainText('3');await expect(page.getByText('Restricted')).toHaveCount(0);
+ if(testInfo.project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Settings',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Contracts',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Reports',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Establishments',exact:true}).click();await page.getByRole('button',{name:'Empresa sintética Praxis',exact:true}).click();
+ await expect(page.getByText('Justificativa sintética')).toBeVisible();await expect(page.getByText('Contrato sintético')).toBeVisible();await expect(page.getByRole('button',{name:'CONTRATO-SINTETICO'})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Change status/})).toHaveCount(0);await expect(page.getByRole('button',{name:'Edit data'})).toHaveCount(0);await expect(page.getByRole('button',{name:/Create opportunity/})).toHaveCount(0);
+ await page.getByRole('button',{name:'Open opportunity ↗'}).click();await expect(page.getByRole('button',{name:'Contract',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Log call/})).toHaveCount(0);await expect(page.getByRole('button',{name:'Edit company'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Contract',exact:true}).click();await expect(page.getByText('CONTRATO-SINTETICO')).toBeVisible();await expect(page.getByRole('button',{name:'Record / update'})).toHaveCount(0);
+ await page.screenshot({path:testInfo.outputPath('viewer.png'),fullPage:true});
+ expect(writes).toEqual([]);
+});
+test('frontend publicado antes da migration V1.1 continua funcionando (API simulada)',async({page})=>{
+ const user={id:uid,email:'admin@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()};
+ const tables:Record<string,any[]>={profiles:[{id:uid,name:'Admin sintético',role:'admin',active:true}],companies:[{id:'c1',legal_name:'Empresa anterior à V1.1',created_at:'2026-10-29T10:00:00Z',prospecting_owner:uid}]};
+ await page.route('https://crm-test.supabase.co/**',async route=>{
+ const request=route.request(),url=new URL(request.url());
+ if(url.pathname.includes('/auth/v1/token'))return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'a',refresh_token:'r',token_type:'bearer',expires_in:3600,user})});
+ if(url.pathname.includes('/auth/v1/user'))return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(user)});
+ if(url.pathname.endsWith('/company_status_history'))return route.fulfill({status:404,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({code:'PGRST205',message:'Could not find the table'})});
+ await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(tables[url.pathname.split('/').pop()!]||[])});
+ });
+ await page.goto('./');await page.getByLabel('E-mail corporativo').fill('admin@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();
+ await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();await expect(page.getByText('Banco sem a migration V1.1',{exact:false})).toBeVisible();
+ if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Estabelecimentos',exact:true}).click();
+ await expect(page.getByRole('row').filter({hasText:'Empresa anterior à V1.1'}).getByText('Cadastrada',{exact:true})).toBeVisible();
 });

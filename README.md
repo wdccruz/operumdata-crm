@@ -8,6 +8,41 @@ Página pública para compartilhar: **https://wdccruz.github.io/operumdata-crm/*
 
 Foram aprovadas 13 validações no serviço hospedado, incluindo login, persistência após nova sessão, CRUD, isolamento de agentes, função administrativa e acesso à interface publicada. As contas e registros operacionais sintéticos foram removidos. Os testes offline continuam separados: domínio, PostgreSQL embarcado e navegador com API simulada. Chaves administrativas não fazem parte do frontend ou do repositório.
 
+## Versão 1.1 — estabelecimentos, idiomas e acesso Praxis
+
+**Estabelecimentos é o cadastro central da rede.** Toda empresa salva em "+ Empresa" (ou importada por CSV) aparece imediatamente em Estabelecimentos, com ou sem oportunidade, contrato, implantação ou gravação. Oportunidade (processo comercial), contrato (formalização) e ativação (início real da gravação) continuam sendo registros vinculados, não condições de exibição.
+
+- **Status comercial** (`companies.commercial_status`): Cadastrada (inicial), Potencial, Em prospecção, Em qualificação, Em negociação, Aguardando Praxis, Em estoque, Contratada, Descartada. Descartada exige motivo. Contratada exige contrato com assinatura efetiva já registrada. Alterar status nunca cria oportunidade ou contrato.
+- **Status operacional** (`companies.operational_status`), independente: Não iniciada, Aguardando implantação, Em implantação, Gravando, Pausada, Encerrada. Gravando exige confirmação explícita e data de início efetivo; contrato assinado ou implantação concluída não bastam. Restrito a administrador e comercial.
+- **Importância estratégica** (`strategic_importance`): Alta, Média, Baixa, Não avaliada, com justificativa. Editável somente pelo administrador. Não é calculada automaticamente e não se confunde com prioridade setorial.
+- **Histórico** (`company_status_history`): toda mudança de status ou importância registra valor anterior, novo, motivo, data e responsável, gravados por trigger no servidor. A auditoria completa (`audit_log`) continua ativa.
+- **Listagem**: tabela com filtros rápidos (Todas, Potenciais, Em prospecção, Em estoque, Contratadas, Gravando, Pausadas, Descartadas), filtros por cidade, estado, setor, importância, responsável e faixa de participantes, e pesquisa por nome, CNPJ e telefone. A ficha reúne dados cadastrais, perfil operacional, classificação, relacionamento (oportunidades, contratos, ações, reuniões, ligações) e histórico.
+- Os bancos guardam **códigos estáveis** (`registered`, `stock`, `recording`...). As etapas e resultados anteriores continuam com seus valores originais no banco; a tradução é apenas de exibição.
+- A migration preenche somente fatos já registrados: empresa com contrato assinado vira Contratada; empresa com operação em "Gravações em andamento" e primeira gravação vira Gravando. Nenhum dado é apagado.
+
+**Idiomas.** Português (pt-BR, padrão) e inglês (en-US) com `react-i18next`. As chaves são os próprios textos em português (`src/locales/en-US.ts` traduz). O seletor PT/EN fica no cabeçalho e na tela de entrada; a preferência é salva por usuário em `profiles.locale` pela função `public.set_my_locale`. Textos livres digitados pelos operadores não são traduzidos. `tests/i18n.test.ts` falha se algum texto de interface ficar sem tradução.
+
+**Perfil `praxis_viewer`.** Leitura integral de todos os módulos (dashboard, empresas, leads, oportunidades, prospecção, agenda, contratos, avaliações, operação, histórico, auditoria e relatórios), no mesmo CRM, com as funções de edição ocultas. O bloqueio é feito no banco: políticas RLS `RESTRICTIVE` exigem perfil de escrita (`admin`, `prospector`, `commercial`) para qualquer INSERT/UPDATE/DELETE em todas as tabelas públicas, inclusive por chamada direta à API. Configurações e gestão de usuários não aparecem para esse perfil. Nenhum segredo de Auth, hash de senha ou chave administrativa é acessível pelo cliente.
+
+### Aplicar a V1.1 no Supabase
+
+1. Aplique `supabase/migrations/202610290007_establishments_v11.sql` (SQL Editor ou `supabase db push`). Enquanto ela não estiver aplicada, o frontend continua funcionando com o modelo anterior e mostra um aviso ao administrador.
+2. (Opcional, para convites pela interface) publique a função atualizada: `supabase functions deploy manage-users`. Para usar o convite a partir do GitHub Pages, defina `APP_URL=https://wdccruz.github.io/operumdata-crm/` e, se quiser manter a instalação anterior, `ALLOWED_ORIGINS=https://operumdata-crm.blondseed19.chatgpt.site/`.
+3. Em Authentication > URL Configuration, inclua `https://wdccruz.github.io/operumdata-crm/` nas Redirect URLs (e como Site URL, se o Pages for o endereço principal), para que links de convite e recuperação abram o CRM publicado.
+
+### Criar um usuário de leitura da Praxis
+
+1. Authentication > Users > **Invite user** com o e-mail corporativo do usuário. Não use senha fixa ou previsível; o convidado define a própria senha (mínimo 12 caracteres) ao abrir o link.
+2. No SQL Editor, vincule o perfil de leitura e o idioma inglês (substitua o e-mail):
+
+```sql
+insert into public.profiles(id,name,role,active,locale)
+select id,'NOME DO USUÁRIO','praxis_viewer',true,'en-US' from auth.users where email='EMAIL_DO_USUARIO'
+on conflict (id) do update set role='praxis_viewer',active=true,locale='en-US';
+```
+
+Alternativa: Configurações > Equipe > Convidar usuário, perfil "Praxis · somente leitura" (requer a função publicada no passo 2 acima).
+
 ## Arquitetura
 
 - React 19 + TypeScript, Vite, Tailwind 4 e CSS institucional. Ícones Lucide, CSV com PapaParse.
@@ -15,7 +50,7 @@ Foram aprovadas 13 validações no serviço hospedado, incluindo login, persist�
 - `src/domain.ts`: indicadores, CNPJ, duplicatas, faixa de participantes e eventos externos.
 - `src/CsvImport.tsx`: importação com prévia, mapeamento e relatório.
 - `src/Editor.tsx`: formulários reutilizáveis com validação, mensagens e bloqueio durante salvamento.
-- `src/App.tsx`: navegação, ficha por abas e módulos comerciais. `src/style.css`: tema e responsividade.
+- `src/App.tsx`: navegação, ficha por abas e módulos comerciais. `src/Establishments.tsx`: listagem e ficha de estabelecimentos. `src/i18n.ts` e `src/locales/en-US.ts`: idiomas. `src/style.css`: tema e responsividade.
 - `supabase/migrations`: esquema normalizado, índices, privilégios, RLS, auditoria e triggers de integridade. Aplique todos os arquivos na ordem do nome.
 - `supabase/functions/manage-users`: convite administrativo. A chave `service_role` existe exclusivamente no servidor.
 - `scripts/test-db.mjs`: integração PostgreSQL/RLS com contas sintéticas.
@@ -49,6 +84,7 @@ Endereço local: `http://localhost:5173/operumdata-crm/`. As variáveis pública
    - `supabase/migrations/202610290004_authorship.sql`
    - `supabase/migrations/202610290005_latest_evaluation.sql`
    - `supabase/migrations/202610290006_server_privileges.sql`
+   - `supabase/migrations/202610290007_establishments_v11.sql`
 3. Alternativa usando CLI instalada: `supabase login`, `supabase link --project-ref SEU_PROJECT_REF`, `supabase db push`. Use o histórico de migrations; não reaplique manualmente uma migration já aplicada.
 4. Em Authentication > Sign In / Providers, **desabilite Allow new users to sign up**. O arquivo `supabase/config.toml` documenta a configuração local; ele não substitui a verificação do painel hospedado.
 5. Em Authentication > URL Configuration, defina Site URL como a URL final do frontend e adicione URLs de redirecionamento exatas, incluindo o caminho `/operumdata-crm/`. Para desenvolvimento, autorize também `http://localhost:5173/operumdata-crm/` e `http://127.0.0.1:5173/operumdata-crm/`.
@@ -82,7 +118,7 @@ Desative um usuário em Configurações > Equipe > Editar acesso. O RLS consulta
 
 ## Segurança e regras de negócio
 
-Administrador tem acesso completo; prospector trabalha nas oportunidades atribuídas; comercial somente nas oportunidades em que é responsável ou comercial autorizado. Somente administrador reatribui leads. Contatos de uma empresa são compartilhados somente entre usuários autorizados para essa empresa. Não distribua oportunidades da mesma empresa para prospectores que devam ser isolados entre si: eles compartilham o cadastro da empresa, enquanto as oportunidades e atividades continuam isoladas.
+Administrador tem acesso completo; `praxis_viewer` lê tudo e não grava nada; prospector trabalha nas oportunidades atribuídas; comercial somente nas oportunidades em que é responsável ou comercial autorizado. Somente administrador reatribui leads. Contatos de uma empresa são compartilhados somente entre usuários autorizados para essa empresa. Não distribua oportunidades da mesma empresa para prospectores que devam ser isolados entre si: eles compartilham o cadastro da empresa, enquanto as oportunidades e atividades continuam isoladas.
 
 Contratos, avaliações, operação e respectivas entradas de auditoria não são visíveis para prospectores. Cadastro público desabilitado, perfil obrigatório e políticas server-side evitam confiar no frontend. Protocolos e avaliações são imutáveis; publique nova versão e registre nova avaliação. A autoria de atividades é a do usuário autenticado. Histórico e registros comerciais não podem ser apagados pelo cliente, inclusive pelo administrador via UI. Exclusão e anonimização seguem procedimento controlado abaixo.
 
