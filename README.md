@@ -124,16 +124,19 @@ Testes de RLS cobrem acesso anônimo, isolamento de dois agentes, escalada de pe
 
 ## GitHub e publicação
 
-O repositório Git local deve permanecer independente. O conector GitHub disponível não fornece criação de repositórios, e `gh` não estava instalado no ambiente de entrega. Crie um **novo** repositório vazio `operumdata-crm` na conta desejada, preferencialmente privado se o plano permitir Pages. Não use repositórios de outros projetos.
+O código está no repositório **privado** [wdccruz/operumdata-crm](https://github.com/wdccruz/operumdata-crm), com `origin` configurado e branch `main` enviada. O Git Credential Manager já tinha autenticação válida; nenhuma credencial foi gravada no checkout.
+
+O plano atual da conta rejeitou a ativação de GitHub Pages neste repositório privado (HTTP 422: plano sem suporte). O repositório permanece privado. Não há URL pública de CRM confirmada. Para publicar via Pages será necessário um plano compatível com repositórios privados ou escolher outra hospedagem que preserve o acesso autenticado.
+
+O workflow executa domínio, PostgreSQL/RLS, navegador, auditoria de produção e build sem depender de um banco externo. Publicação é separada e só roda com `ENABLE_PAGES=true`. Configure essa variável somente depois de resolver o suporte do plano e habilitar Pages com **GitHub Actions**. Em Settings > Secrets and variables > Actions > Variables, configure também `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores públicos do projeto dedicado. Nunca configure `service_role` no GitHub ou frontend.
 
 ```text
-git remote add origin https://github.com/SEU_USUARIO/operumdata-crm.git
-git push -u origin main
+git push origin main
 ```
 
-Em Settings > Pages escolha **GitHub Actions**. Em Settings > Secrets and variables > Actions > Variables, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com valores públicos do projeto dedicado. Não crie variável `service_role` no GitHub ou frontend. Execute o workflow. Ele valida testes, exige variáveis não vazias, compila com base `/operumdata-crm/` e publica somente `dist/` em `main`. PRs executam validação, sem publicação. Para domínio próprio ou nome diferente, altere `VITE_BASE_PATH` no workflow e as URLs autorizadas do Supabase.
+O job de publicação exige variáveis não vazias, compila com base `/operumdata-crm/` e publica somente `dist/` em `main`. A URL real será a fornecida pelo job deploy. PRs executam validação sem publicação. Para outro host, configure `VITE_BASE_PATH` e ajuste as URLs de Auth no Supabase. Não publique o bundle atual como um CRM operacional: ele está sem Supabase configurado e mostra somente a tela de configuração.
 
-A URL real é a fornecida pela execução do job deploy. Esta entrega não presume URL publicada. Assets são públicos em Pages; dados exigem autenticação e RLS.
+O endereço local `http://127.0.0.1:5173/operumdata-crm/` respondeu HTTP 200 na verificação; isso confirma somente o frontend local, sem comprovar login ou persistência no Supabase hospedado.
 
 ## Backup e restauração
 
