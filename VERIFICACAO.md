@@ -1,42 +1,56 @@
-# Verificação da entrega
+# Verificação da implantação — OperumData CRM
 
-Projeto: `operumdata-crm`, Git independente em `main`. Nenhum outro repositório foi alterado. Não há conexão configurada com um projeto Supabase de produção, nem frontend publicado nesta entrega.
+Data: 29/10/2026, horário de Brasília.
 
-## Resultados executados
+## Acesso confirmado
 
-- `npm install` e atualizações pontuais: dependências instaladas e lockfile gerado.
-- `npm test`: **7 testes de domínio passaram**.
-- `npm run test:db`: **34 testes PostgreSQL/RLS passaram**, executando as cinco migrations em PGlite. Inclui persistência por exportação/restauração do diretório do banco, autorização de agentes, desativação com sessão existente, autoria, auditoria, duplicatas, reabertura, aprovação vigente, assinatura e ativação.
-- `npx playwright install chromium`: Chromium de testes instalado.
-- `npm run test:ui`: **2 cenários passaram**, desktop Chromium e viewport de iPhone 13 usando Chromium. Testes usam **API HTTP simulada** com dados sintéticos, não Supabase hospedado. Exercitam login de interface, empresa, oportunidade, contato, ligação, tarefa, reunião, avaliação, contrato e reload; também verificam ausência de overflow horizontal. Não equivalem a validação no Safari real.
-- `npm run build`: build TypeScript/Vite de produção aprovado, com base `/operumdata-crm/`.
-- `npm audit`: nenhuma vulnerabilidade detectada na árvore instalada na verificação final.
-- Inspeção visual dos screenshots de dashboard desktop e ficha mobile, gerados pelos testes. Artefatos temporários em `test-results/`, ignorados pelo Git.
-- `git init -b main`: repositório local separado inicializado.
+**URL publicada: https://operumdata-crm.blondseed19.chatgpt.site/**
 
-Problemas encontrados durante execução foram corrigidos: dependência de testes vulnerável, semântica SQL de NULL em campos condicionais, visibilidade RLS em INSERT RETURNING, nomes acessíveis de campos e referência à avaliação vigente mais recente. As falhas iniciais não são apresentadas como resultados finais.
+Hospedagem privada por proprietário via Sites, seguida do login Supabase do CRM. A entrada privada com a conta ChatGPT proprietária e a tela real do CRM foram verificadas no navegador. O login e a consulta de leads na URL publicada também foram testados automaticamente com contas sintéticas, sem simular a API Supabase. O proprietário definiu sua senha e sua sessão como administrador foi confirmada na aplicação local.
 
-## Pendências externas
+Código: repositório **privado** https://github.com/wdccruz/operumdata-crm, branch `main`.
 
-1. Criar projeto Supabase dedicado, aplicar **todas as cinco migrations** e desabilitar cadastro público no Auth hospedado.
-2. Criar o primeiro usuário administrador real e seu perfil; definir URL/chave pública nas variáveis de ambiente.
-3. Configurar SMTP, URLs autorizadas e secret `APP_URL`; publicar a função `manage-users` e homologar convite/recuperação reais.
-4. Criar repositório remoto novo `operumdata-crm`, adicionar remote e enviar `main`. O GitHub conectado identifica `wdccruz`, mas o conector não oferece criação de repositórios; não havia `gh` instalado. Nenhuma credencial GitHub foi extraída ou gravada.
-5. Ativar Pages por Actions, cadastrar as duas variáveis públicas no repositório e executar o workflow. Não há URL publicada a declarar.
-6. Homologar com duas contas prospectores no Supabase real, validar backup/restauração e retenção antes de importar dados comerciais.
+## Supabase configurado
 
-## Escopo e limites declarados
+- Organização: OperumData. Projeto existente: `operumdata-crm`. Região: East US (Ohio).
+- Referência pública do projeto: `lpmzgbsvswnlxomaoyzj`. Nenhum outro projeto Supabase foi criado.
+- Seis migrations aplicadas e registradas em `supabase_migrations.schema_migrations`.
+- 16 tabelas públicas com RLS habilitada e 42 políticas. Schema `private` não exposto na Data API.
+- Privilégios de cliente mínimos; chave de servidor também recebeu privilégios SQL explícitos na sexta migration.
+- Cadastro público desabilitado, login anônimo desabilitado, provedor e-mail ativo, senha mínima de 12 caracteres.
+- Site URL e redirect de produção: URL publicada acima. Redirects locais exatos também autorizados.
+- `manage-users` implantada, com verificação JWT da plataforma habilitada, `getUser()` e perfil administrador ativo verificados no código. `APP_URL` aponta para produção. CORS responde somente com a origem canônica, sem o caminho de URL.
+- URL e chave pública configuradas em `.env.local` ignorado e em variáveis públicas do GitHub Actions. Nenhuma chave administrativa no frontend, GitHub ou arquivos versionados.
 
-Agenda interna em lista cronológica, não grade mensal. CSV suporta campos essenciais de prospecção, prévia, mapeamento e relatório, sem importação de contratos ou documentos. Leads listados com 25 por página; dados autorizados são buscados em lotes para o volume inicial, com agregação no cliente. Horas gravadas/aceitas têm tabela preparada; sem gestão de vídeo, cobrança ou ERP. Exclusão/anonimização é procedimento administrativo documentado, incluindo snapshots da auditoria. Critérios extras em JSON são referências; novas regras automáticas exigem migração/testes.
+## Testes executados
 
-O código entrega a base funcional para os 11 critérios de aceite. Login real, persistência pelo serviço hospedado e publicação só podem ser confirmados depois da configuração externa. Instruções detalhadas e comandos estão no README.
+| Comando / contexto | Resultado |
+| --- | --- |
+| `npm test` | 7 testes de domínio passaram |
+| `npm run test:db` | 35 testes PostgreSQL/RLS passaram em PGlite |
+| `npm run test:ui` | 2 cenários desktop/celular passaram com API simulada |
+| `node scripts/test-hosted.mjs` | 13 validações no Supabase real e na URL publicada passaram |
+| `npm run build` com base `/` | Build de produção para Sites aprovado |
+| `npm audit` | Nenhuma vulnerabilidade detectada na árvore instalada |
 
-## Atualização da publicação — 29/10/2026
+Validações reais: acesso anônimo bloqueado; cadastro público bloqueado; login de administrador e dois prospectores; função de convites rejeitando anônimo e prospector; JWT/CORS de administrador; empresa, lead e contato persistidos; ligação, tarefa e reunião; atualização com histórico; isolamento de leitura e escrita entre agentes; contratos e avaliações restritos; promoção de perfil negada; login e leitura pela interface publicada; persistência após sair e entrar novamente.
 
-O código foi enviado ao repositório **privado** https://github.com/wdccruz/operumdata-crm. O Git Credential Manager local já estava autenticado como `wdccruz`; nenhuma credencial foi copiada para o repositório.
+As contas e os registros operacionais sintéticos foram removidos ao final. A auditoria de alterações sintéticas continua sendo histórico, sem entrar nos indicadores comerciais. Não foram inseridos dados reais de empresas nos testes. Relatório JSON e screenshots locais ficam em `artifacts/homologacao/`, ignorados pelo Git. O acesso técnico da hospedagem usado nos testes foi transmitido apenas por stdin sem eco e apenas para a origem do Site; não faz parte do frontend.
 
-O GitHub rejeitou a criação de Pages com HTTP 422: o plano atual não suporta Pages para este repositório privado. Não tornar o repositório público para contornar a limitação. A validação CI roda independentemente da publicação. O job Pages só será habilitado quando `ENABLE_PAGES=true` for configurado, após resolver a elegibilidade do plano e configurar as variáveis públicas do Supabase.
+## Publicação
 
-Nenhum `.env.local`, token CLI Supabase ou projeto vinculado foi encontrado neste checkout. O painel Supabase abriu uma nova autorização de login GitHub, pendente de ação do proprietário. Não há confirmação de banco provisionado, migrations aplicadas ou primeiro administrador no serviço hospedado.
+GitHub Pages foi rejeitado pelo GitHub com HTTP 422 porque o plano atual não suporta o repositório privado. O código foi mantido privado. A alternativa Sites foi publicada privadamente, sem expor dados comerciais.
 
-Os testes de interface usam porta 5174 para não conflitar com a instância de desenvolvimento local na porta 5173. Os testes continuam usando uma API simulada, sem inferir sucesso da autenticação de produção.
+- Site: `appgprj_6ae3a65dd0d88191a856955196597deb`.
+- Versão: `appgprj_6ae3a65dd0d88191a856955196597deb~appgver_15b5755508a88191a6e7136106cb1349`.
+- Deployment: `appgdep_6ae3a6bcdc50819180b11e2abb6c26cf`.
+- Resultado da plataforma: `succeeded`.
+- Checkout de publicação separado: `../operumdata-crm-hosting`; identidade e assets estáticos, sem base comercial.
+
+O workflow GitHub valida o código; Pages permanece desabilitado. Alterações futuras precisam ser publicadas no Sites explicitamente, pois um push ao GitHub não atualiza o Site automaticamente.
+
+## Configurações para ampliar o uso
+
+O acesso do proprietário está pronto. Para a equipe, configurar visualizadores autorizados da hospedagem privada e convites/perfis no CRM. Configurar SMTP próprio no Supabase antes de convidar destinatários externos: o e-mail padrão limita destinatários e volume. Definir política de retenção, backup e testar restauração externa antes de importar base comercial de produção.
+
+Agenda interna é cronológica; CSV importa os campos essenciais; horas gravadas/aceitas têm estrutura preparada, sem ERP ou vídeos. Listagem carrega dados autorizados em lotes, com paginação visual; volumes maiores exigirão agregações e filtros no servidor. Esses limites estão descritos no README.
