@@ -159,7 +159,7 @@ export const en:Record<string,string>={
 'Técnica':'Technical','Uma operação. Cada próximo passo.':'One operation. Every next step.','Usuário atribuído':'Assigned user','Visão da operação':'Operations overview',
 'Voltar para {{name}}':'Back to {{name}}','Voltar para {{page}}':'Back to {{page}}','Vídeo':'Video','Vídeo de apresentação por referência':'Presentation video by reference',
 'Vínculo do registro é imutável':'Record link is immutable','WORKSPACE / OPERUMDATA':'WORKSPACE / OPERUMDATA','WhatsApp':'WhatsApp','movem o futuro.':'move the future.',
-'Última alteração de status':'Last status change','Última atualização':'Last update','Última interação':'Last interaction','Último motivo de status':'Last status reason',
+'Ver ficha →':'View record →','Ver ficha de {{name}}':'View record of {{name}}','Última alteração de status':'Last status change','Última atualização':'Last update','Última interação':'Last interaction','Último motivo de status':'Last status reason',
 '{{label}} · todos':'{{label}} · all','{{n}} estabelecimentos':'{{n}} establishments','{{n}} oportunidades':'{{n}} opportunities',
 '{{band}} participantes':'{{band}} participants','{{n}} linhas · {{w}} avisos / linhas ignoradas':'{{n}} rows · {{w}} warnings / skipped rows','UF':'State',
 '{{min}} min / reunião · Meta: {{leads}} leads / {{contracts}} contratos':'{{min}} min / meeting · Goal: {{leads}} leads / {{contracts}} contracts',

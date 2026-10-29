@@ -95,4 +95,7 @@ test('frontend publicado antes da migration V1.1 continua funcionando (API simul
  await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();await expect(page.getByText('Banco sem a migration V1.1',{exact:false})).toBeVisible();
  if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Estabelecimentos',exact:true}).click();
  await expect(page.getByRole('row').filter({hasText:'Empresa anterior à V1.1'}).getByText('Cadastrada',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Empresa anterior à V1.1',exact:true}).click();await expect(page.getByRole('heading',{name:'Empresa anterior à V1.1'})).toBeVisible();await expect(page.getByText('Dados cadastrais')).toBeVisible();
+ await page.getByRole('button',{name:/Voltar para/}).click();await page.getByRole('button',{name:'Ver ficha de Empresa anterior à V1.1'}).click();await expect(page.getByRole('heading',{name:'Empresa anterior à V1.1'})).toBeVisible();
+ await page.getByRole('button',{name:/Voltar para/}).click();await page.getByRole('row').filter({hasText:'Empresa anterior à V1.1'}).getByRole('cell').nth(2).click();await expect(page.getByText('Dados cadastrais')).toBeVisible();
 });

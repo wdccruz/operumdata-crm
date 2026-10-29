@@ -11,3 +11,4 @@
 .metric-grid.network{grid-template-columns:repeat(4,1fr);margin:0 0 6px}.metric-button{display:block;text-align:left;width:100%;border-radius:0;color:inherit}.metric-button:disabled{opacity:1;cursor:default}.metric-button:not(:disabled):hover{border-color:#ff5a1f}
 .panel h3{font:10px monospace;letter-spacing:1px;text-transform:uppercase;color:#8e949e;margin:22px 0 4px}.callout.hint{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.callout.hint button{font-size:11px}
 @media(max-width:760px){.status-row{grid-template-columns:1fr}.metric-grid.network{grid-template-columns:repeat(2,1fr)}.topbar .lang-switch button{padding:5px 6px}.topbar .badge.readonly{display:none}}
+tr.clickable{cursor:pointer}tr.clickable .text-button{text-decoration:underline;text-decoration-color:#ff5a1f66;text-underline-offset:3px}.open-record{font-size:11px;white-space:nowrap;color:#ff875b;border-color:#68402f}
