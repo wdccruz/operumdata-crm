@@ -1,4 +1,5 @@
 import {ActivateAccess} from './ActivateAccess';
+import {readAuthFlow} from './auth-flow';
 import {CsvImport} from './CsvImport';
 import {useEffect,useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -21,6 +22,7 @@ export function LangSwitch(){const{t,i18n:inst}=useTranslation();return <div cla
 export default function App(){
  const {t}=useTranslation();
  const[pendingAccess,setPendingAccess]=useState(inboundAuth.pending);
+ useEffect(()=>{const handle=()=>{const flow=readAuthFlow(location.href);setPendingAccess(flow.pending);if(flow.error)setError(t(flow.error))};window.addEventListener('hashchange',handle);return()=>window.removeEventListener('hashchange',handle)},[t]);
  const[session,setSession]=useState<Session|null>(null),[s,setS]=useState<Store>(emptyStore),[loading,setLoading]=useState(true),[page,setPage]=useState('Dashboard'),[selected,setSelected]=useState<string>(),[selectedCompany,setSelectedCompany]=useState<string>(),[tab,setTab]=useState('Resumo'),[modal,setModal]=useState<Modal>(),[notice,setNotice]=useState(''),[error,setError]=useState(''),[sidebar,setSidebar]=useState(false),[search,setSearch]=useState(''),[filters,setFilters]=useState<Row>({}),[est,setEst]=useState<EstablishmentFilter>({quick:'all'}),[kanban,setKanban]=useState(false),[offset,setOffset]=useState(0),[sort,setSort]=useState('created_at'),[importing,setImporting]=useState(false),[passwordMode,setPasswordMode]=useState(initialAuthFlow),[localeSynced,setLocaleSynced]=useState('');
  const uid=session?.user.id,p=s.profiles.find(p=>p.id===uid),active=!!p?.active,admin=active&&p?.role==='admin',commercial=admin||active&&p?.role==='commercial',viewer=active&&p?.role==='praxis_viewer',full=commercial||viewer,canWrite=active&&writerRoles.includes(p?.role);
  async function refresh(){setLoading(true);try{setS(await loadStore());setError('')}catch(e){setError(errorText(e))}finally{setLoading(false)}}
