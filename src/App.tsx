@@ -1,3 +1,4 @@
+import {ActivateAccess} from './ActivateAccess';
 import {CsvImport} from './CsvImport';
 import {useEffect,useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -5,7 +6,7 @@ import {LayoutDashboard,Users,Phone,CalendarDays,FileCheck,Building2,ChartNoAxes
 import type {Session} from '@supabase/supabase-js';
 import Papa from 'papaparse';
 import i18n,{remember,type Locale} from './i18n';
-import {db,configured,initialAuthFlow,loadStore,emptyStore,save,errorText,saveLocale,schema,type Row,type Store} from './db';
+import {db,configured,initialAuthFlow,inboundAuth,loadStore,emptyStore,save,errorText,saveLocale,schema,type Row,type Store} from './db';
 import {Editor,options,type Field} from './Editor';
 import {EstablishmentList,EstablishmentDetail} from './Establishments';
 import {stages,qualifications,callResults,operationStages,criteria,digits,validCnpj,participantBand,possibleDuplicates,metrics,safeCsv,googleEvent,commercialStatuses,operationalStatuses,importanceLevels,networkMetrics,acceptedHours,type EstablishmentFilter} from './domain';
@@ -19,6 +20,7 @@ type Modal={title:string;fields:Field[];initial?:Row;onSave:(v:Row)=>Promise<voi
 export function LangSwitch(){const{t,i18n:inst}=useTranslation();return <div className="lang-switch" role="group" aria-label={t('Idioma')}>{(['pt-BR','en-US'] as Locale[]).map(l=><button key={l} aria-pressed={inst.language===l} className={inst.language===l?'active':''} onClick={()=>{void inst.changeLanguage(l);remember(l);window.dispatchEvent(new CustomEvent('operum-locale',{detail:l}))}}>{l==='pt-BR'?'PT':'EN'}</button>)}</div>}
 export default function App(){
  const {t}=useTranslation();
+ const[pendingAccess,setPendingAccess]=useState(inboundAuth.pending);
  const[session,setSession]=useState<Session|null>(null),[s,setS]=useState<Store>(emptyStore),[loading,setLoading]=useState(true),[page,setPage]=useState('Dashboard'),[selected,setSelected]=useState<string>(),[selectedCompany,setSelectedCompany]=useState<string>(),[tab,setTab]=useState('Resumo'),[modal,setModal]=useState<Modal>(),[notice,setNotice]=useState(''),[error,setError]=useState(''),[sidebar,setSidebar]=useState(false),[search,setSearch]=useState(''),[filters,setFilters]=useState<Row>({}),[est,setEst]=useState<EstablishmentFilter>({quick:'all'}),[kanban,setKanban]=useState(false),[offset,setOffset]=useState(0),[sort,setSort]=useState('created_at'),[importing,setImporting]=useState(false),[passwordMode,setPasswordMode]=useState(initialAuthFlow),[localeSynced,setLocaleSynced]=useState('');
  const uid=session?.user.id,p=s.profiles.find(p=>p.id===uid),active=!!p?.active,admin=active&&p?.role==='admin',commercial=admin||active&&p?.role==='commercial',viewer=active&&p?.role==='praxis_viewer',full=commercial||viewer,canWrite=active&&writerRoles.includes(p?.role);
  async function refresh(){setLoading(true);try{setS(await loadStore());setError('')}catch(e){setError(errorText(e))}finally{setLoading(false)}}
@@ -65,7 +67,8 @@ export default function App(){
  const roleOptions=Object.entries(roleNames).map(([value,label])=>({value,label:t(label)})),localeOptions=[{value:'pt-BR',label:'Português (Brasil)'},{value:'en-US',label:'English (US)'}];
  function exportCsv(){const rows=filtered.map(o=>Object.fromEntries(Object.entries({empresa:o.company.legal_name,cnpj:o.company.cnpj,cidade:o.company.city,telefone:o.company.phone,etapa:o.stage,qualificacao:o.qualification,prioridade:o.priority,origem:o.company.source,proxima_acao:o.next?.title,retorno:o.next?.due_at}).map(([k,v])=>[k,safeCsv(v)])));const url=URL.createObjectURL(new Blob(['﻿'+Papa.unparse(rows)],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='operumdata-leads.csv';a.click();URL.revokeObjectURL(url)}
  if(!configured)return <div className="setup"><div className="setup-top"><Brand/><LangSwitch/></div><h1>{t('Conecte seu banco.')}<br/>{t('Comece a operar.')}</h1><p>{t('Aplique as migrations no Supabase e informe as variáveis públicas para iniciar. Nenhum lead é armazenado no navegador.')}</p><pre>VITE_SUPABASE_URL<br/>VITE_SUPABASE_ANON_KEY</pre><p>{t('Consulte o README para criar o primeiro administrador e desabilitar o cadastro público.')}</p><span className="badge">{t('AGUARDANDO SUPABASE')}</span></div>;
- if(!session)return <Login error={error} onError={setError}/>;
+ if(pendingAccess)return <ActivateAccess pending={pendingAccess} onSuccess={value=>{setSession(value);setPasswordMode(true);setPendingAccess(null)}} onCancel={()=>{setPendingAccess(null);setPasswordMode(false)}}/>;
+ if(!session)return <Login error={error||(inboundAuth.error?t(inboundAuth.error):'')} onError={setError}/>;
  if(passwordMode)return <div className="setup"><div className="setup-top"><Brand/><LangSwitch/></div><h1>{t('Defina sua senha')}</h1><form onSubmit={async e=>{e.preventDefault();const{error}=await db.auth.updateUser({password:String(new FormData(e.currentTarget).get('password'))});if(error)setError(error.message);else{setPasswordMode(false);history.replaceState(null,'',location.pathname)}}}><label>{t('Nova senha (mínimo 12 caracteres)')}<input name="password" type="password" required minLength={12}/></label><button className="primary">{t('Salvar senha')}</button>{error&&<p className="error">{error}</p>}</form></div>;
  const heading=selected?t('Ficha da oportunidade'):ec?t('Ficha do estabelecimento'):t(page);
  const metricLabels=['Oportunidades cadastradas','Empresas contatadas','Tentativas de ligação','Decisores alcançados','Leads pré-qualificados','Reuniões agendadas','Reuniões realizadas','Contratos assinados','Aguardando implantação','Ativados · primeira gravação','Tarefas atrasadas','Reuniões · próximos 7 dias'];

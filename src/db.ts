@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import i18n from './i18n';
-export const initialAuthFlow = location.hash.includes("type=invite") || location.hash.includes("type=recovery");
+import {readAuthFlow} from './auth-flow';
+export const inboundAuth = readAuthFlow(location.href);
+export const initialAuthFlow = inboundAuth.passwordFlow;
 export const configured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 export const db = createClient(import.meta.env.VITE_SUPABASE_URL || 'https://unconfigured.supabase.co', import.meta.env.VITE_SUPABASE_ANON_KEY || 'not-configured', { auth: { persistSession: true, storage: sessionStorage, detectSessionInUrl: true, autoRefreshToken: true } });
 // Somente a sessão fica em sessionStorage. Todos os dados comerciais vêm do PostgreSQL.

@@ -6,3 +6,7 @@ enable_signup = false
 minimum_password_length = 12
 [functions.manage-users]
 verify_jwt = true
+
+# Autorização por segredo aleatório de uso único; nenhum acesso é concedido sem validá-lo.
+[functions.activate-access]
+verify_jwt = false

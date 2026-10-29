@@ -1,6 +1,11 @@
 // en-US. Chaves = texto pt-BR da interface. Valores fixos do banco (etapas, resultados, status)
 // também são chaves: o banco guarda identificadores estáveis, a tradução é só de exibição.
 export const en:Record<string,string>={
+'Ativar meu acesso':'Activate my access',
+'Clique abaixo para ativar seu acesso e definir sua senha. Abrir esta página não utiliza o link.':'Click below to activate your access and set your password. Opening this page does not use the link.',
+'Ativando…':'Activating…','Ativar e definir senha':'Activate and set password',
+'Não foi possível ativar este link. Ele pode já ter sido usado ou revogado. Solicite um novo link ao administrador.':'This link could not be activated. It may already have been used or revoked. Ask your administrator for a new link.',
+'Este link é inválido, já foi usado ou expirou. Solicite um novo link ao administrador.':'This link is invalid, already used or expired. Ask your administrator for a new link.',
 '01 / ACESSO À OPERAÇÃO':'01 / OPERATIONS ACCESS','41 ou mais':'41 or more',
 'A operação registra primeira gravação em {{d}}. Confirme o início efetivo para marcar como Gravando.':'Operations recorded a first recording on {{d}}. Confirm the effective start to mark as Recording.',
 'ACESSO RESTRITO':'RESTRICTED ACCESS','AGUARDANDO SUPABASE':'WAITING FOR SUPABASE',

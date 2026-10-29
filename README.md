@@ -216,3 +216,11 @@ Para pedidos de exclusão ou término da retenção, administrador autorizado id
 Limites do MVP: listagem carrega registros autorizados em lotes e pagina visualmente 25 por página; para bases grandes, migrar filtros/agregações para consultas SQL/RPC server-side antes de ampliar a operação. Agenda é cronológica, sem grade mensal. Relatórios são operacionais, sem ERP. Critérios adicionais em JSON são referências; novos critérios automáticos exigem migração e novos testes. Essas limitações não criam dados fictícios ou permissões extras.
 
 Documentação oficial consultada: [RLS no Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security), [gerenciamento de usuários](https://supabase.com/docs/guides/auth/managing-user-data), [convites administrativos](https://supabase.com/docs/reference/javascript/auth-admin-inviteuserbyemail) e [Vite](https://vite.dev/guide/).
+
+## Links manuais de ativação
+
+O endpoint `activate-access` recebe um segredo aleatório de 256 bits, vinculado a um usuário `praxis_viewer` ativo. A migration 0008 armazena somente o hash em `access_activations`, sem data de expiração. A tabela e as três RPCs são acessíveis somente por `service_role`, nunca por anon/authenticated. A função valida o segredo antes de emitir qualquer sessão. `verify_jwt=false` vale somente para esse endpoint, pois o destinatário ainda não possui sessão; a autorização é feita pelo segredo de uso único. As demais funções e as políticas de dados continuam protegidas.
+
+O link usa `#activation=...`: o fragmento não é enviado ao servidor da página nem aos robôs de prévia. Abrir a página não consome o link. O destinatário precisa clicar em Ativar e definir senha. Só após validação, emissão da sessão e marcação atômica de uso o formulário de senha abre. A reserva de concorrência pode ser retomada após falha; não representa vencimento do link. Links usados ou revogados são rejeitados. Nenhum e-mail é disparado por essa função. As sessões Supabase continuam com seu prazo normal depois da ativação.
+
+Para revogar um link, administrador autorizado executa no SQL Editor `update public.access_activations set revoked_at=now() where id='UUID_DO_REGISTRO';`. Desativar o perfil também impede a ativação. Não registrar o segredo em logs, código, relatório ou banco; enviá-lo somente ao destinatário autorizado.
