@@ -17,6 +17,3 @@ export async function loadStore(): Promise<Store> {
 }
 export async function save(table:string, values:Row, id?:string){ const query=id?db.from(table).update(values).eq('id',id):db.from(table).insert(values); const {data,error}=await query.select().single(); if(error)throw error; return data as Row; }
 export function errorText(error:unknown){ const e=error as {message?:string;code?:string}; if(e.code==='23505')return 'Já existe um registro com este CNPJ ou empresa nesta campanha.'; if(e.code==='42501')return 'Acesso negado. Confira seu perfil e a atribuição da oportunidade.'; return e.message || 'Não foi possível concluir a operação.'; }
-
-
-

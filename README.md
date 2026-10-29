@@ -167,4 +167,3 @@ Para pedidos de exclusão ou término da retenção, administrador autorizado id
 Limites do MVP: listagem carrega registros autorizados em lotes e pagina visualmente 25 por página; para bases grandes, migrar filtros/agregações para consultas SQL/RPC server-side antes de ampliar a operação. Agenda é cronológica, sem grade mensal. Relatórios são operacionais, sem ERP. Critérios adicionais em JSON são referências; novos critérios automáticos exigem migração e novos testes. Essas limitações não criam dados fictícios ou permissões extras.
 
 Documentação oficial consultada: [RLS no Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security), [gerenciamento de usuários](https://supabase.com/docs/guides/auth/managing-user-data), [convites administrativos](https://supabase.com/docs/reference/javascript/auth-admin-inviteuserbyemail) e [Vite](https://vite.dev/guide/).
-

@@ -33,4 +33,3 @@ test('fluxo comercial na interface e leitura após recarregar (API simulada)',as
  if(testInfo.project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Leads',exact:true}).click();await page.getByRole('button',{name:'Empresa de teste sintética',exact:true}).click();await expect(page.getByText('Retornar ao decisor',{exact:true})).toBeVisible();await page.screenshot({path:testInfo.outputPath('lead.png'),fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
-

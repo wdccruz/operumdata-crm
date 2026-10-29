@@ -24,4 +24,3 @@ create function private.guard_profile() returns trigger language plpgsql set sea
  return new; end $$;
 create trigger guard_profile before update on public.profiles for each row execute function private.guard_profile();
 revoke all on function private.guard_child(),private.guard_profile() from public;
-

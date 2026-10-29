@@ -21,4 +21,3 @@ Deno.serve(async req=>{
  return reply({ok:true});
  }catch{return reply({error:'Não foi possível processar o convite'},400)}
 });
-

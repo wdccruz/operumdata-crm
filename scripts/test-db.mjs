@@ -67,5 +67,3 @@ const image=await db.dumpDataDir();await db.close();
 const restored=await PGlite.create({loadDataDir:image});
 await ok('dados preservados após fechar e restaurar o banco PostgreSQL',async()=>{assert.equal(Number((await restored.query('select count(*) n from companies')).rows[0].n),2);assert.equal(Number((await restored.query('select count(*) n from contracts')).rows[0].n),1)});
 await restored.close();console.log(`\n${passed} testes PostgreSQL/RLS passaram. Auth HTTP e Supabase hospedado exigem validação após configuração.`);
-
-
