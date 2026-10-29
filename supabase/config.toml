@@ -1,0 +1,8 @@
+project_id = "operumdata-crm"
+[auth]
+site_url = "http://localhost:5173/operumdata-crm/"
+additional_redirect_urls = ["http://localhost:5173/operumdata-crm/"]
+enable_signup = false
+minimum_password_length = 12
+[functions.manage-users]
+verify_jwt = true

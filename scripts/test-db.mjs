@@ -1,0 +1,71 @@
+process.on('uncaughtException',e=>{console.error(e.message,e.query||'');process.exit(1)});
+import {PGlite} from '@electric-sql/pglite';
+import {readFile,readdir} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const db=new PGlite();let passed=0;
+await db.exec(`create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
+const admin='00000000-0000-0000-0000-000000000001',a='00000000-0000-0000-0000-000000000002',b='00000000-0000-0000-0000-000000000003',commercial='00000000-0000-0000-0000-000000000004';
+await db.exec(`insert into auth.users values ('${admin}'),('${a}'),('${b}'),('${commercial}'); insert into public.profiles(id,name,role) values ('${admin}','Administrador sintético','admin'),('${a}','Agente A sintético','prospector'),('${b}','Agente B sintético','prospector'),('${commercial}','Comercial sintético','commercial');`);
+async function as(id){await db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role authenticated;`)}
+async function ok(name,fn){await fn();passed++;console.log('OK '+name)}
+async function denied(sql){await assert.rejects(()=>db.exec(sql))}
+async function count(table){return Number((await db.query('select count(*) n from public.'+table)).rows[0].n)}
+const campaign=(await db.query('select id from campaigns')).rows[0].id,protocol=(await db.query('select id from protocols')).rows[0].id;
+await as(a);
+const cid=(await db.query(`insert into companies(legal_name,cnpj,participants) values ('Empresa sintética A','12345678000195',5) returning id`)).rows[0].id;
+const lid=(await db.query(`insert into opportunities(company_id,campaign_id) values ('${cid}','${campaign}') returning id`)).rows[0].id;
+const contact=(await db.query(`insert into contacts(company_id,name) values ('${cid}','Decisor sintético') returning id`)).rows[0].id;
+await ok('prospector cadastra empresa, oportunidade e contato',async()=>assert.equal(await count('contacts'),1));
+await ok('CNPJ duplicado bloqueado',()=>denied(`insert into companies(legal_name,cnpj) values ('Duplicada','12345678000195')`));
+await ok('perda sem motivo bloqueada',()=>denied(`update opportunities set stage='Perdido',reason=null where id='${lid}'`));
+await ok('inelegibilidade sem motivo bloqueada',()=>denied(`update opportunities set qualification='Não elegível' where id='${lid}'`));
+await ok('qualificação e reabertura preservam histórico',async()=>{await db.exec(`update opportunities set qualification='Pronto para reunião' where id='${lid}'; update opportunities set stage='Perdido',reason='Teste sintético' where id='${lid}'; update opportunities set stage='Negociação' where id='${lid}';`);assert.ok((await db.query(`select qualified_at from opportunities where id='${lid}'`)).rows[0].qualified_at);assert.ok(await count('audit_log')>=6)});
+await ok('ligação registrada e imutável',async()=>{await db.exec(`insert into activities(opportunity_id,result,reached_decision_maker) values ('${lid}','Interessado',true)`);await denied(`update activities set notes='adulterado'`)});
+await ok('tarefa criada e concluída',async()=>{await db.exec(`insert into tasks(opportunity_id,title,due_at) values ('${lid}','Retorno sintético',now()); update tasks set done=true;`);assert.equal((await db.query('select done from tasks')).rows[0].done,true)});
+await ok('reunião agendada e realizada',async()=>{await db.exec(`insert into meetings(opportunity_id,contact_id,starts_at) values ('${lid}','${contact}',now()); update meetings set status='Realizada',outcome='Apresentação concluída';`);assert.equal(await count('meetings'),1)});
+await ok('prospector não assume outro agente',()=>denied(`update opportunities set owner_id='${b}' where id='${lid}'`));
+await ok('prospector não altera próprio perfil',async()=>{await db.exec(`update profiles set role='admin' where id='${a}'`);assert.equal((await db.query(`select role from profiles where id='${a}'`)).rows[0].role,'prospector')});
+await ok('prospector não acessa formalização',()=>denied(`insert into contracts(opportunity_id,origin,acquisition_owner) values ('${lid}','teste','${a}')`));
+await as(b);
+const bid=(await db.query(`insert into companies(legal_name) values ('Empresa sintética B') returning id`)).rows[0].id;
+const blid=(await db.query(`insert into opportunities(company_id,campaign_id) values ('${bid}','${campaign}') returning id`)).rows[0].id;
+await ok('isolamento SELECT de empresas e oportunidades',async()=>{assert.equal(await count('companies'),1);assert.equal(await count('opportunities'),1);assert.equal(await count('contacts'),0);assert.equal(await count('activities'),0);assert.equal(await count('meetings'),0);assert.equal(await count('tasks'),0);assert.equal((await db.query(`select * from audit_log where company_id='${cid}' or opportunity_id='${lid}'`)).rows.length,0)});
+await ok('isolamento INSERT em lead alheio',()=>denied(`insert into activities(opportunity_id,result) values ('${lid}','Interessado')`));
+await ok('isolamento UPDATE em lead alheio',async()=>{await db.exec(`update opportunities set stage='Perdido',reason='Tentativa' where id='${lid}'`);await as(a);assert.equal((await db.query(`select stage from opportunities where id='${lid}'`)).rows[0].stage,'Negociação')});
+await as(admin);
+await ok('administrador visualiza todos',async()=>assert.equal(await count('companies'),2));
+await ok('último administrador não pode ser desativado',()=>denied(`update profiles set active=false where id='${admin}'`));
+await db.exec(`update opportunities set commercial_id='${commercial}' where id='${lid}'`);
+await as(commercial);
+await ok('comercial vê somente atribuições autorizadas',async()=>assert.equal(await count('opportunities'),1));
+await ok('reunião não pode usar contato de outra empresa',()=>denied(`insert into meetings(opportunity_id,contact_id,starts_at) values ('${blid}','${contact}',now())`));
+await ok('assinatura exige aprovação técnica e formal',()=>denied(`insert into contracts(opportunity_id,origin,acquisition_owner,signature_confirmed,signed_on,reference) values ('${lid}','teste','${a}',true,current_date,'SINT-1')`));
+await ok('avaliação técnica incompleta rejeitada',()=>denied(`insert into evaluations(opportunity_id,protocol_id,technical_fit,justification) values ('${lid}','${protocol}',true,'Teste')`));
+await ok('aprovação sem referência rejeitada',()=>denied(`insert into evaluations(opportunity_id,protocol_id,buyer_approved,justification) values ('${lid}','${protocol}',true,'Teste')`));
+await ok('operação sem contrato rejeitada',()=>denied(`insert into operations(opportunity_id) values ('${lid}')`));
+await ok('protocolo e avaliação imutáveis',async()=>{await denied(`update protocols set min_participants=1`);await denied(`delete from protocols`)});
+await db.exec(`insert into evaluations(opportunity_id,protocol_id,commercial_fit,technical_fit,active_demand,buyer_approved,buyer_approval_ref,answers,justification) values ('${lid}','${protocol}',true,true,true,true,'REF-SINTETICA','{"company_active":true,"compatible_activity":true,"professional_environment":true,"outside_home":true,"two_tasks":true,"authorization":true,"safety":true}','Avaliação sintética');`);
+await ok('contrato efetivamente assinado após aprovação',async()=>{await db.exec(`insert into contracts(opportunity_id,origin,acquisition_owner,signature_confirmed,signed_on,reference) values ('${lid}','Prospecção sintética','${a}',true,current_date,'SINT-1'); update opportunities set stage='Contrato assinado' where id='${lid}';`);assert.equal(await count('contracts'),1)});
+await ok('originação imutável',()=>denied(`update contracts set origin='Alterada'`));
+await ok('assinatura não equivale à ativação',async()=>{await db.exec(`insert into operations(opportunity_id,status,deployment_completed_at) values ('${lid}','Implantação concluída',now())`);assert.equal((await db.query('select first_recording_at from operations')).rows[0].first_recording_at,null)});
+await ok('ativação sem gravação bloqueada',()=>denied(`update operations set status='Ativação confirmada'`));
+await ok('ativação com primeira gravação registrada',async()=>{await db.exec(`update operations set status='Ativação confirmada',first_recording_at=now()`);assert.ok((await db.query('select first_recording_at from operations')).rows[0].first_recording_at)});
+await ok('nova avaliação negativa impede reutilizar aprovação histórica',async()=>{
+ await db.exec(`insert into evaluations(opportunity_id,protocol_id,justification) values ('${lid}','${protocol}','Reavaliação negativa sintética');`);
+ await denied(`update contracts set pending_items='Reavaliado'`);
+});
+await ok('autoria de avaliação não pode ser falsificada',()=>denied(`insert into evaluations(opportunity_id,protocol_id,actor_id,justification) values ('${lid}','${protocol}','${a}','Tentativa de falsificação')`));
+await as(a);
+await ok('prospector não vê contrato nem dados restritos no histórico',async()=>{assert.equal(await count('contracts'),0);assert.equal(await count('evaluations'),0);assert.equal(await count('operations'),0);assert.equal((await db.query(`select * from audit_log where entity in ('contracts','evaluations','operations')`)).rows.length,0)});
+await as(admin);await db.exec(`update profiles set active=false where id='${a}'`);await as(a);
+await ok('desativação revoga leitura imediatamente com JWT existente',async()=>{assert.equal(await count('companies'),0);assert.equal(await count('opportunities'),0);await denied(`insert into companies(legal_name) values ('Bloqueada')`)});
+await db.exec('reset role; set role anon;');
+await ok('anônimo sem acesso',()=>denied('select * from companies'));
+await db.exec('reset role;');
+const image=await db.dumpDataDir();await db.close();
+const restored=await PGlite.create({loadDataDir:image});
+await ok('dados preservados após fechar e restaurar o banco PostgreSQL',async()=>{assert.equal(Number((await restored.query('select count(*) n from companies')).rows[0].n),2);assert.equal(Number((await restored.query('select count(*) n from contracts')).rows[0].n),1)});
+await restored.close();console.log(`\n${passed} testes PostgreSQL/RLS passaram. Auth HTTP e Supabase hospedado exigem validação após configuração.`);
+
+
