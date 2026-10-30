@@ -53,3 +53,10 @@ export function networkMetrics(companies:Row[]){
 }
 /** Horas aceitas: somente valores efetivamente aceitos, nunca estimados. */
 export function acceptedHours(s:Store,ids:Set<string>,from='',to=''){return s.production.filter(p=>ids.has(p.opportunity_id)&&p.accepted_hours!=null&&(!from||p.recorded_on>=from)&&(!to||p.recorded_on<=to)).reduce((sum,p)=>sum+Number(p.accepted_hours),0)}
+/** Resumo do navegador e sistema a partir do user agent, para o registro de acessos. */
+export function deviceSummary(ua?:string|null){
+ if(!ua)return '—';
+ const browser=/Edg\//.test(ua)?'Edge':/OPR\//.test(ua)?'Opera':/Firefox\//.test(ua)?'Firefox':/Chrome\//.test(ua)?'Chrome':/Safari\//.test(ua)?'Safari':'Navegador';
+ const os=/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac OS X|Macintosh/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'';
+ return os?`${browser} · ${os}`:browser;
+}

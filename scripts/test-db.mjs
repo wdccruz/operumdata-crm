@@ -3,7 +3,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const db=new PGlite();let passed=0;
-await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key, email text, last_sign_in_at timestamptz); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
 for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
 const admin='00000000-0000-0000-0000-000000000001',a='00000000-0000-0000-0000-000000000002',b='00000000-0000-0000-0000-000000000003',commercial='00000000-0000-0000-0000-000000000004',viewer='00000000-0000-0000-0000-000000000005';
 await db.exec(`insert into auth.users values ('${admin}'),('${a}'),('${b}'),('${commercial}'),('${viewer}'); insert into public.profiles(id,name,role) values ('${admin}','Administrador sintético','admin'),('${a}','Agente A sintético','prospector'),('${b}','Agente B sintético','prospector'),('${commercial}','Comercial sintético','commercial'); insert into public.profiles(id,name,role,locale) values ('${viewer}','Leitor Praxis sintético','praxis_viewer','en-US');`);
@@ -93,6 +93,21 @@ await ok('administrador mantém permissões após V1.1',async()=>{await db.exec(
 await db.exec('reset role; set role anon;');
 await ok('anônimo sem histórico nem RPC de idioma',async()=>{await denied('select * from company_status_history');await denied(`select public.set_my_locale('en-US')`)});
 await db.exec('reset role;');
+// ===== Registro de acessos =====
+await db.exec(`update auth.users set email='leitor@example.invalid',last_sign_in_at=now() where id='${viewer}'`);
+await as(viewer);
+await ok('acesso do praxis_viewer é registrado uma vez a cada 30 minutos',async()=>{assert.equal((await db.query(`select public.record_access('Navegador sintético') r`)).rows[0].r,true);assert.equal((await db.query(`select public.record_access('Navegador sintético') r`)).rows[0].r,false)});
+await ok('praxis_viewer não lê o registro de acessos nem a visão administrativa',async()=>{assert.equal(await count('access_log'),0);await denied('select * from public.access_overview()')});
+await ok('registro de acessos não aceita escrita direta',async()=>{await denied(`insert into access_log(user_id) values ('${viewer}')`);await denied(`insert into access_log(user_id) values ('${admin}')`);await denied(`update access_log set occurred_at=now()-interval '1 year'`);await denied('delete from access_log')});
+await as(b);
+await ok('prospector registra o próprio acesso e não vê o de outros',async()=>{assert.equal((await db.query(`select public.record_access(null) r`)).rows[0].r,true);assert.equal(await count('access_log'),0)});
+await as(a);
+await ok('usuário desativado não registra acesso',async()=>assert.equal((await db.query(`select public.record_access(null) r`)).rows[0].r,false));
+await as(admin);
+await ok('administrador vê último login, último acesso e acessos em 30 dias',async()=>{const rows=(await db.query('select * from public.access_overview()')).rows;const v=rows.find(r=>r.user_id===viewer);assert.equal(v.email,'leitor@example.invalid');assert.ok(v.last_sign_in_at);assert.ok(v.last_access_at);assert.equal(Number(v.accesses_30d),1);assert.equal(v.role,'praxis_viewer');assert.equal(Number(rows.find(r=>r.user_id===a).accesses_30d),0);const log=(await db.query('select * from access_log order by occurred_at')).rows;assert.equal(log.length,2);assert.equal(log[0].user_agent,'Navegador sintético')});
+await db.exec('reset role; set role anon;');
+await ok('anônimo não registra nem consulta acessos',async()=>{await denied(`select public.record_access('x')`);await denied('select * from public.access_overview()');await denied('select * from access_log')});
+await db.exec('reset role;');
 const companyTotal=await count('companies');
 await db.exec('reset role; set role service_role;');
 await ok('API de servidor possui privilégios SQL explícitos',async()=>assert.equal(await count('profiles'),5));
@@ -120,7 +135,7 @@ await ok('dados preservados após fechar e restaurar o banco PostgreSQL',async()
 await restored.close();
 // Migration incremental sobre base existente: aplica 0001–0006, grava dados e então aplica 0007.
 const legacy=new PGlite();
-await legacy.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
+await legacy.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key, email text, last_sign_in_at timestamptz); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
 const files=(await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
 for(const file of files.filter(f=>f<'202610290007'))await legacy.exec(await readFile('supabase/migrations/'+file,'utf8'));
 await legacy.exec(`insert into auth.users values ('${admin}'); insert into profiles(id,name,role) values ('${admin}','Admin','admin'); set request.jwt.claim.sub='${admin}';`);

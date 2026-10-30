@@ -30,6 +30,16 @@ Foram aprovadas 13 validações no serviço hospedado, incluindo login, persist�
 2. (Opcional, para convites pela interface) publique a função atualizada: `supabase functions deploy manage-users`. Para usar o convite a partir do GitHub Pages, defina `APP_URL=https://wdccruz.github.io/operumdata-crm/` e, se quiser manter a instalação anterior, `ALLOWED_ORIGINS=https://operumdata-crm.blondseed19.chatgpt.site/`.
 3. Em Authentication > URL Configuration, inclua `https://wdccruz.github.io/operumdata-crm/` nas Redirect URLs (e como Site URL, se o Pages for o endereço principal), para que links de convite e recuperação abram o CRM publicado.
 
+### Registro de acessos
+
+Configurações > **Registro de acessos** (somente administrador) mostra, por usuário:
+- último login (Supabase Auth);
+- último acesso ao CRM;
+- quantidade de acessos em 30 dias;
+- os 50 acessos mais recentes, com navegador e sistema.
+
+Cada abertura do CRM com sessão válida grava um acesso pela função `public.record_access`, no máximo um a cada 30 minutos por usuário. Ninguém consegue gravar, alterar ou apagar registros diretamente nem registrar acesso em nome de outro usuário. A consulta usa `public.access_overview`, que recusa quem não é administrador. Exige a migration `202610300009_access_log.sql`; antes dela, a seção mostra um aviso e o restante do CRM funciona normalmente. Abrir o link sem fazer login não gera registro, e o GitHub Pages não fornece log de visitas.
+
 ### Criar um usuário de leitura da Praxis
 
 1. Authentication > Users > **Invite user** com o e-mail corporativo do usuário. Não use senha fixa ou previsível; o convidado define a própria senha (mínimo 12 caracteres) ao abrir o link.
@@ -85,6 +95,8 @@ Endereço local: `http://localhost:5173/operumdata-crm/`. As variáveis pública
    - `supabase/migrations/202610290005_latest_evaluation.sql`
    - `supabase/migrations/202610290006_server_privileges.sql`
    - `supabase/migrations/202610290007_establishments_v11.sql`
+   - `supabase/migrations/202610290008_access_activations.sql`
+   - `supabase/migrations/202610300009_access_log.sql`
 3. Alternativa usando CLI instalada: `supabase login`, `supabase link --project-ref SEU_PROJECT_REF`, `supabase db push`. Use o histórico de migrations; não reaplique manualmente uma migration já aplicada.
 4. Em Authentication > Sign In / Providers, **desabilite Allow new users to sign up**. O arquivo `supabase/config.toml` documenta a configuração local; ele não substitui a verificação do painel hospedado.
 5. Em Authentication > URL Configuration, defina Site URL como a URL final do frontend e adicione URLs de redirecionamento exatas, incluindo o caminho `/operumdata-crm/`. Para desenvolvimento, autorize também `http://localhost:5173/operumdata-crm/` e `http://127.0.0.1:5173/operumdata-crm/`.

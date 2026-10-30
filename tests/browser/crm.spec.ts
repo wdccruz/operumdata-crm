@@ -59,11 +59,12 @@ test('praxis_viewer: leitura integral em inglês, sem edição (API simulada)',a
  const user={id:vid,email:'viewer@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()};
  const now=new Date().toISOString();
  const tables:Record<string,any[]>={profiles:[{id:vid,name:'Leitor sintético',role:'praxis_viewer',active:true,locale:'en-US'},{id:uid,name:'Admin sintético',role:'admin',active:true,locale:'pt-BR'}],companies:[{id:'c1',legal_name:'Empresa sintética Praxis',city:'Campinas',state:'SP',participants:15,commercial_status:'contracted',operational_status:'recording',recording_confirmed:true,recording_started_at:now,strategic_importance:'high',importance_justification:'Justificativa sintética',prospecting_owner:uid,created_at:now,updated_at:now,status_changed_at:now}],contacts:[],opportunities:[{id:'o1',company_id:'c1',campaign_id:'campaign',owner_id:uid,stage:'Contrato assinado',priority:1,created_at:now}],activities:[],tasks:[],meetings:[],categories:[],buyers:[{id:'buyer',name:'Praxis Robotics'}],campaigns:[{id:'campaign',buyer_id:'buyer',name:'Campanha sintética',active:true,meeting_minutes:30}],protocols:[],evaluations:[],contracts:[{id:'k1',opportunity_id:'o1',signature_confirmed:true,signed_on:'2026-10-29',reference:'CONTRATO-SINTETICO'}],operations:[],production:[{id:'p1',opportunity_id:'o1',campaign_id:'campaign',recorded_on:'2026-10-29',recorded_hours:4,accepted_hours:3}],audit_log:[],company_status_history:[{id:1,company_id:'c1',field:'commercial_status',old_value:'negotiating',new_value:'contracted',reason:'Contrato sintético',actor_id:uid,changed_at:now}]};
- const writes:string[]=[];
+ const writes:string[]=[],rpcs:string[]=[];
  await page.route('https://crm-test.supabase.co/**',async route=>{
  const request=route.request(),url=new URL(request.url());let body:any=[];
  if(url.pathname.includes('/auth/v1/token'))body={access_token:'synthetic-access-token',refresh_token:'synthetic-refresh-token',token_type:'bearer',expires_in:3600,user};
  else if(url.pathname.includes('/auth/v1/user'))body=user;
+ else if(url.pathname.includes('/rest/v1/rpc/')){rpcs.push(url.pathname.split('/').pop()!);body=true;}
  else if(url.pathname.includes('/rest/v1/')){if(['POST','PATCH','PUT','DELETE'].includes(request.method()))writes.push(request.method()+' '+url.pathname);body=tables[url.pathname.split('/').pop()!]||[];}
  await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(body)});
  });
@@ -79,7 +80,7 @@ test('praxis_viewer: leitura integral em inglês, sem edição (API simulada)',a
  await page.getByRole('button',{name:'Open opportunity ↗'}).click();await expect(page.getByRole('button',{name:'Contract',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Log call/})).toHaveCount(0);await expect(page.getByRole('button',{name:'Edit company'})).toHaveCount(0);
  await page.getByRole('button',{name:'Contract',exact:true}).click();await expect(page.getByText('CONTRATO-SINTETICO')).toBeVisible();await expect(page.getByRole('button',{name:'Record / update'})).toHaveCount(0);
  await page.screenshot({path:testInfo.outputPath('viewer.png'),fullPage:true});
- expect(writes).toEqual([]);
+ expect(writes).toEqual([]);expect(rpcs.filter(r=>r==='record_access')).toHaveLength(1);
 });
 test('frontend publicado antes da migration V1.1 continua funcionando (API simulada)',async({page})=>{
  const user={id:uid,email:'admin@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()};
@@ -98,4 +99,25 @@ test('frontend publicado antes da migration V1.1 continua funcionando (API simul
  await page.getByRole('button',{name:'Empresa anterior à V1.1',exact:true}).click();await expect(page.getByRole('heading',{name:'Empresa anterior à V1.1'})).toBeVisible();await expect(page.getByText('Dados cadastrais')).toBeVisible();
  await page.getByRole('button',{name:/Voltar para/}).click();await page.getByRole('button',{name:'Ver ficha de Empresa anterior à V1.1'}).click();await expect(page.getByRole('heading',{name:'Empresa anterior à V1.1'})).toBeVisible();
  await page.getByRole('button',{name:/Voltar para/}).click();await page.getByRole('row').filter({hasText:'Empresa anterior à V1.1'}).getByRole('cell').nth(2).click();await expect(page.getByText('Dados cadastrais')).toBeVisible();
+});
+
+test('administrador consulta o registro de acessos (API simulada)',async({page})=>{
+ const vid='00000000-0000-0000-0000-000000000005',now=new Date().toISOString();
+ const user={id:uid,email:'admin@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:now};
+ const tables:Record<string,any[]>={profiles:[{id:uid,name:'Admin sintético',role:'admin',active:true,locale:'pt-BR'},{id:vid,name:'Leitor sintético',role:'praxis_viewer',active:true,locale:'en-US'}],access_log:[{id:2,user_id:vid,occurred_at:now,user_agent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'}]};
+ const overview=[{user_id:vid,name:'Leitor sintético',role:'praxis_viewer',active:true,email:'leitor@example.invalid',last_sign_in_at:now,last_access_at:now,accesses_30d:3},{user_id:uid,name:'Admin sintético',role:'admin',active:true,email:'admin@example.invalid',last_sign_in_at:null,last_access_at:null,accesses_30d:0}];
+ const rpcs:string[]=[];
+ await page.route('https://crm-test.supabase.co/**',async route=>{
+ const request=route.request(),url=new URL(request.url());let body:any=[];
+ if(url.pathname.includes('/auth/v1/token'))body={access_token:'a',refresh_token:'r',token_type:'bearer',expires_in:3600,user};
+ else if(url.pathname.includes('/auth/v1/user'))body=user;
+ else if(url.pathname.includes('/rest/v1/rpc/')){const fn=url.pathname.split('/').pop()!;rpcs.push(fn);body=fn==='access_overview'?overview:true;}
+ else if(url.pathname.includes('/rest/v1/'))body=tables[url.pathname.split('/').pop()!]||[];
+ await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(body)});
+ });
+ await page.goto('./');await page.getByLabel('E-mail corporativo').fill('admin@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();
+ await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();await expect.poll(()=>rpcs.filter(r=>r==='record_access').length).toBe(1);
+ if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Configurações',exact:true}).click();
+ const row=page.getByRole('row').filter({hasText:'leitor@example.invalid'});await expect(row).toBeVisible();await expect(row.getByText('Praxis · somente leitura')).toBeVisible();await expect(row.getByRole('cell',{name:'3',exact:true})).toBeVisible();
+ await expect(page.getByRole('row').filter({hasText:'admin@example.invalid'}).getByText('Nunca entrou')).toBeVisible();await expect(page.getByText('Chrome · Windows',{exact:false})).toBeVisible();
 });

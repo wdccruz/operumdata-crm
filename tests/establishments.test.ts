@@ -19,3 +19,12 @@ describe('estabelecimentos',()=>{
  it('próxima ação considera empresa e tarefas abertas das oportunidades',()=>{const st={...s,opportunities:[{id:'o1',company_id:'a'}],tasks:[{opportunity_id:'o1',title:'Retorno',due_at:'2026-11-05T10:00:00Z',done:false},{opportunity_id:'o1',title:'Feita',due_at:'2026-11-01T10:00:00Z',done:true}]};expect(companyNext(st,{...companies[0],next_action:'Visita',next_action_at:'2026-11-02T10:00:00Z'})?.title).toBe('Visita');expect(companyNext(st,companies[0])?.title).toBe('Retorno');expect(companyNext(st,companies[1])).toBeUndefined()});
  it('horas aceitas somam apenas aceite registrado no período',()=>{const st={...empty,production:[{opportunity_id:'o',recorded_on:'2026-11-01',recorded_hours:10,accepted_hours:8},{opportunity_id:'o',recorded_on:'2026-11-02',recorded_hours:5,accepted_hours:null},{opportunity_id:'o',recorded_on:'2026-12-01',recorded_hours:5,accepted_hours:5}]};expect(acceptedHours(st,new Set(['o']))).toBe(13);expect(acceptedHours(st,new Set(['o']),'2026-11-01','2026-11-30')).toBe(8);expect(acceptedHours(st,new Set())).toBe(0)});
 });
+import {deviceSummary} from '../src/domain';
+describe('registro de acessos',()=>{
+ it('resume navegador e sistema do user agent',()=>{
+  expect(deviceSummary('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36')).toBe('Chrome · Windows');
+  expect(deviceSummary('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/141.0 Safari/537.36 Edg/141.0')).toBe('Edge · Windows');
+  expect(deviceSummary('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari · iOS');
+  expect(deviceSummary(null)).toBe('—');
+ });
+});

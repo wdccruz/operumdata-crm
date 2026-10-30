@@ -14,7 +14,7 @@ export async function uiStrings(){
   }
  }
  // Mensagens das triggers do banco também são exibidas ao usuário.
- for(const file of ['supabase/migrations/202610290001_initial.sql','supabase/migrations/202610290002_hardening.sql','supabase/migrations/202610290004_authorship.sql','supabase/migrations/202610290005_latest_evaluation.sql','supabase/migrations/202610290007_establishments_v11.sql']){
+ for(const file of ['supabase/migrations/202610290001_initial.sql','supabase/migrations/202610290002_hardening.sql','supabase/migrations/202610290004_authorship.sql','supabase/migrations/202610290005_latest_evaluation.sql','supabase/migrations/202610290007_establishments_v11.sql','supabase/migrations/202610300009_access_log.sql']){
   for(const m of (await readFile(file,'utf8')).matchAll(/raise exception '([^']+)'/g))out.add(m[1]);
  }
  return [...out].sort();

@@ -27,3 +27,12 @@ export async function save(table:string, values:Row, id?:string){ const query=id
 // Mensagens do banco (triggers) são chaves de tradução; mensagens desconhecidas são exibidas como recebidas.
 export function errorText(error:unknown){ const e=error as {message?:string;code?:string}; const t=i18n.t.bind(i18n); if(e.code==='23505')return t('Já existe um registro com este CNPJ ou empresa nesta campanha.'); if(e.code==='42501')return t('Acesso negado. Confira seu perfil e a atribuição da oportunidade.'); if(e.code==='23514')return t('Dados incompatíveis com as regras do registro. Revise motivo, confirmação e campos obrigatórios.'); return e.message ? t(e.message) : t('Não foi possível concluir a operação.'); }
 export async function saveLocale(locale:string){ const {error}=await db.rpc('set_my_locale',{p_locale:locale}); if(error&&!missing(error))throw error; return !error; }
+// Registro de acessos (migration 0009). Falha silenciosa se a migration ainda não estiver aplicada.
+export async function recordAccess(){ const {error}=await db.rpc('record_access',{p_user_agent:navigator.userAgent.slice(0,300)}); if(error&&!missing(error))console.warn('record_access',error.message); }
+export type AccessData={overview:Row[];events:Row[];available:boolean};
+export async function loadAccess():Promise<AccessData>{
+ const [overview,events]=await Promise.all([db.rpc('access_overview'),db.from('access_log').select('*').order('occurred_at',{ascending:false}).limit(100)]);
+ if((overview.error&&missing(overview.error))||(events.error&&missing(events.error)))return {overview:[],events:[],available:false};
+ if(overview.error)throw overview.error; if(events.error)throw events.error;
+ return {overview:overview.data as Row[],events:events.data as Row[],available:true};
+}
