@@ -125,3 +125,28 @@ test('administrador consulta o registro de acessos (API simulada)',async({page})
  const row=page.getByRole('row').filter({hasText:'leitor@example.invalid'});await expect(row).toBeVisible();await expect(row.getByText('Empresa parceira · leitura e parecer')).toBeVisible();await expect(row.getByRole('cell',{name:'3',exact:true})).toBeVisible();
  await expect(page.getByRole('row').filter({hasText:'admin@example.invalid'}).getByText('Nunca entrou')).toBeVisible();await expect(page.getByText('Chrome · Windows',{exact:false})).toBeVisible();
 });
+
+test('agenda sincronizada com o Google: status, compromisso pessoal e sincronizar agora (API simulada)',async({page})=>{
+ const now=new Date(),later=new Date(now.getTime()+86400000).toISOString(),end=new Date(now.getTime()+90000000).toISOString();
+ const user={id:uid,email:'admin@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:now.toISOString()};
+ const tables:Record<string,any[]>={profiles:[{id:uid,name:'Admin sintético',role:'admin',active:true,locale:'pt-BR'}],
+  calendar_events:[{id:'e1',user_id:uid,google_event_id:'g1',title:'Consulta pessoal sintética',starts_at:later,ends_at:end,all_day:false,html_link:'https://calendar.google.com/x'},{id:'e2',user_id:'00000000-0000-0000-0000-000000000009',google_event_id:'g2',title:'Evento de outra pessoa',starts_at:later,ends_at:end,all_day:false}]};
+ const actions:string[]=[];
+ await page.route('https://crm-test.supabase.co/**',async route=>{
+ const request=route.request(),url=new URL(request.url());let body:any=[];
+ if(request.method()==='OPTIONS')return route.fulfill({status:200,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'*'}});
+ if(url.pathname.includes('/auth/v1/token'))body={access_token:'a',refresh_token:'r',token_type:'bearer',expires_in:3600,user};
+ else if(url.pathname.includes('/auth/v1/user'))body=user;
+ else if(url.pathname.includes('/functions/v1/google-calendar')){actions.push(JSON.parse(request.postData()||'{}').action);body={ok:true}}
+ else if(url.pathname.includes('/rest/v1/rpc/')){const fn=url.pathname.split('/').pop()!;body=fn==='my_google_connection'?[{google_email:'agenda@example.invalid',status:'active',last_synced_at:now.toISOString(),last_error:null,connected_at:now.toISOString()}]:true;}
+ else if(url.pathname.includes('/rest/v1/'))body=tables[url.pathname.split('/').pop()!]||[];
+ await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(body)});
+ });
+ await page.goto('./');await page.getByLabel('E-mail corporativo').fill('admin@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();
+ await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();
+ if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Agenda',exact:true}).click();
+ await expect(page.getByText('Conectado como agenda@example.invalid',{exact:false})).toBeVisible();
+ await expect(page.getByText('Consulta pessoal sintética',{exact:false})).toBeVisible();await expect(page.getByText('Google Agenda · só você vê')).toBeVisible();
+ await expect(page.getByText('Evento de outra pessoa')).toHaveCount(0);
+ await page.getByRole('button',{name:'Sincronizar agora'}).click();await expect(page.getByText('Agenda sincronizada com o Google.')).toBeVisible();expect(actions).toContain('sync');
+});

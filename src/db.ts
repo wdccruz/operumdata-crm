@@ -7,19 +7,20 @@ export const configured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.me
 export const db = createClient(import.meta.env.VITE_SUPABASE_URL || 'https://unconfigured.supabase.co', import.meta.env.VITE_SUPABASE_ANON_KEY || 'not-configured', { auth: { persistSession: true, storage: sessionStorage, detectSessionInUrl: true, autoRefreshToken: true } });
 // Somente a sessão fica em sessionStorage. Todos os dados comerciais vêm do PostgreSQL.
 export type Row = Record<string, any>;
-export const tables = ['companies','contacts','opportunities','activities','tasks','meetings','categories','buyers','campaigns','protocols','evaluations','contracts','operations','production','profiles','audit_log','company_status_history','lead_reviews'] as const;
+export const tables = ['companies','contacts','opportunities','activities','tasks','meetings','categories','buyers','campaigns','protocols','evaluations','contracts','operations','production','profiles','audit_log','company_status_history','lead_reviews','calendar_events'] as const;
 export type Store = Record<(typeof tables)[number], Row[]>;
 export const emptyStore = Object.fromEntries(tables.map(t=>[t,[] as Row[]])) as Store;
 // Tabela criada pela migration V1.1. Enquanto ela não estiver aplicada, a aplicação continua
 // funcionando com o modelo anterior e avisa o administrador (sem dados simulados).
 // lead_reviews (parecer da empresa) vem da migration 0010; antes dela a ficha mostra um aviso.
-export const schema={v11:true,v12:true};
+// calendar_events (compromissos do Google, só do próprio usuário) vem da migration 0011.
+export const schema={v11:true,v12:true,v13:true};
 const missing=(e:{code?:string})=>['PGRST205','42P01','PGRST202','42883'].includes(e.code||'');
 export async function loadStore(): Promise<Store> {
- schema.v11=true;schema.v12=true;
+ schema.v11=true;schema.v12=true;schema.v13=true;
  const results = await Promise.all(tables.map(async table=> {
   const rows:Row[]=[]; let from=0;
-  while(true){ const {data,error}=await db.from(table).select('*').order(table==='audit_log'?'occurred_at':'id').range(from,from+499); if(error){ if(table==='company_status_history'&&missing(error)){schema.v11=false;break;} if(table==='lead_reviews'&&missing(error)){schema.v12=false;break;} throw error; } rows.push(...data); if(data.length<500) break; from+=500; }
+  while(true){ const {data,error}=await db.from(table).select('*').order(table==='audit_log'?'occurred_at':'id').range(from,from+499); if(error){ if(table==='company_status_history'&&missing(error)){schema.v11=false;break;} if(table==='lead_reviews'&&missing(error)){schema.v12=false;break;} if(table==='calendar_events'&&missing(error)){schema.v13=false;break;} throw error; } rows.push(...data); if(data.length<500) break; from+=500; }
   return [table,rows];
  }));
  return Object.fromEntries(results) as Store;
@@ -41,3 +42,7 @@ export async function loadAccess():Promise<AccessData>{
 export async function loadNetworkTotals():Promise<Row|undefined>{const{data,error}=await db.rpc('network_totals');if(error){if(missing(error))return undefined;throw error;}const r=Array.isArray(data)?data[0]:undefined;return r?Object.fromEntries(Object.entries(r).map(([k,v])=>[k,Number(v)])):undefined}
 // O parecer não passa pelo bloqueio de somente leitura: autoria e empresa são definidas no servidor.
 export async function saveReview(values:Row){const{error}=await db.from('lead_reviews').insert(values);if(error)throw error;}
+// Google Agenda (migration 0011 + Edge Function google-calendar). Tokens nunca chegam ao navegador.
+export type GoogleStatus={google_email:string|null;status:string;last_synced_at:string|null;last_error:string|null;connected_at:string}|null;
+export async function loadGoogleStatus():Promise<GoogleStatus|undefined>{const{data,error}=await db.rpc('my_google_connection');if(error){if(missing(error))return undefined;throw error;}return (Array.isArray(data)?data[0]:null)||null}
+export async function googleAction(action:'connect'|'sync'|'disconnect'):Promise<Row>{const{data,error}=await db.functions.invoke('google-calendar',{body:{action}});if(error){let message=error.message;try{const b=await (error as {context?:Response}).context?.json();if(b?.error)message=b.error}catch{/* resposta sem JSON */}throw new Error(message)}return data as Row}

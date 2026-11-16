@@ -10,3 +10,8 @@ verify_jwt = true
 # Autorização por segredo aleatório de uso único; nenhum acesso é concedido sem validá-lo.
 [functions.activate-access]
 verify_jwt = false
+
+# Retorno do Google (OAuth) e agendamento chegam sem JWT: o estado é assinado (HMAC) e o
+# agendamento usa a chave GOOGLE_SYNC_KEY. As demais ações validam a sessão dentro da função.
+[functions.google-calendar]
+verify_jwt = false
