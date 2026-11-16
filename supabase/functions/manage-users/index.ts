@@ -18,9 +18,12 @@ Deno.serve(async req=>{
  try{
  const body=await req.json();
  if(body.action!=='invite'||!['admin','commercial','prospector','praxis_viewer'].includes(body.role)||(body.locale!=null&&!['pt-BR','en-US'].includes(body.locale))||!body.name?.trim()||!/^\S+@\S+\.\S+$/.test(body.email||''))return reply({error:'Dados de convite inválidos'},400);
+ // Empresa parceira (código praxis_viewer) exige o comprador vinculado; os demais perfis não têm vínculo.
+ const buyerId=body.role==='praxis_viewer'?String(body.buyer_id||''):null;
+ if(body.role==='praxis_viewer'&&!/^[0-9a-f-]{36}$/i.test(buyerId||''))return reply({error:'Selecione a empresa parceira do usuário.'},400);
  const server=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
  const {data,error}=await server.auth.admin.inviteUserByEmail(body.email,{redirectTo:appUrl});if(error)return reply({error:error.message},400);
- const {error:insertError}=await client.from('profiles').insert({id:data.user.id,name:body.name.trim(),role:body.role,locale:body.locale||(body.role==='praxis_viewer'?'en-US':'pt-BR')});
+ const {error:insertError}=await client.from('profiles').insert({id:data.user.id,name:body.name.trim(),role:body.role,buyer_id:buyerId,locale:body.locale||(body.role==='praxis_viewer'?'en-US':'pt-BR')});
  if(insertError){await server.auth.admin.deleteUser(data.user.id);return reply({error:'Perfil não criado. Convite invalidado; tente novamente.'},500)}
  return reply({ok:true});
  }catch{return reply({error:'Não foi possível processar o convite'},400)}

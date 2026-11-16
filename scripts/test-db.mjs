@@ -6,7 +6,7 @@ const db=new PGlite();let passed=0;
 await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key, email text, last_sign_in_at timestamptz); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
 for(const file of (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('supabase/migrations/'+file,'utf8'));
 const admin='00000000-0000-0000-0000-000000000001',a='00000000-0000-0000-0000-000000000002',b='00000000-0000-0000-0000-000000000003',commercial='00000000-0000-0000-0000-000000000004',viewer='00000000-0000-0000-0000-000000000005';
-await db.exec(`insert into auth.users values ('${admin}'),('${a}'),('${b}'),('${commercial}'),('${viewer}'); insert into public.profiles(id,name,role) values ('${admin}','Administrador sintético','admin'),('${a}','Agente A sintético','prospector'),('${b}','Agente B sintético','prospector'),('${commercial}','Comercial sintético','commercial'); insert into public.profiles(id,name,role,locale) values ('${viewer}','Leitor Praxis sintético','praxis_viewer','en-US');`);
+await db.exec(`insert into auth.users values ('${admin}'),('${a}'),('${b}'),('${commercial}'),('${viewer}'); insert into public.profiles(id,name,role) values ('${admin}','Administrador sintético','admin'),('${a}','Agente A sintético','prospector'),('${b}','Agente B sintético','prospector'),('${commercial}','Comercial sintético','commercial'); insert into public.profiles(id,name,role,locale,buyer_id) select '${viewer}','Leitor Praxis sintético','praxis_viewer','en-US',id from public.buyers where name='Praxis Robotics';`);
 async function as(id){await db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role authenticated;`)}
 async function ok(name,fn){await fn();passed++;console.log('OK '+name)}
 async function denied(sql){await assert.rejects(()=>db.exec(sql))}
@@ -81,7 +81,7 @@ await ok('prospector altera status comercial da própria empresa',async()=>{awai
 await ok('prospector não vê histórico de empresa alheia',async()=>assert.equal(Number((await db.query(`select count(*) n from company_status_history where company_id='${est.id}'`)).rows[0].n),0));
 await ok('histórico não aceita escrita pela API',async()=>{await denied(`insert into company_status_history(company_id,field,new_value) values ('${bid}','commercial_status','stock')`);await denied(`update company_status_history set reason='x'`)});
 await as(viewer);
-await ok('praxis_viewer lê todos os módulos',async()=>{for(const t of ['companies','opportunities','contacts','activities','tasks','meetings','evaluations','contracts','operations','audit_log','company_status_history','profiles','campaigns','protocols','categories','buyers'])assert.ok(await count(t)>0,t);assert.equal(await count('companies'),(await (async()=>{await db.exec('reset role;');const n=await count('companies');await as(viewer);return n})()))});
+await ok('empresa parceira lê os módulos dos próprios leads',async()=>{for(const t of ['companies','opportunities','contacts','activities','tasks','meetings','evaluations','contracts','operations','audit_log','company_status_history','profiles','campaigns','protocols','categories','buyers'])assert.ok(await count(t)>0,t);assert.equal(await count('opportunities'),2);assert.equal(await count('companies'),2);assert.equal(await count('profiles'),1);assert.equal(Number((await db.query(`select count(*) n from companies where id='${est.id}'`)).rows[0].n),0)});
 await ok('praxis_viewer vê contratos, avaliações e auditoria restritas',async()=>{assert.equal(await count('contracts'),1);assert.ok(await count('evaluations')>=2);assert.ok((await db.query(`select * from audit_log where entity in ('contracts','evaluations','operations')`)).rows.length>0)});
 const writes=[`insert into companies(legal_name) values ('Viewer')`,`insert into companies(legal_name,prospecting_owner) values ('Viewer','${viewer}')`,`update companies set legal_name='Alterado' where id='${est.id}'`,`update companies set commercial_status='discarded',status_reason='x' where id='${est.id}'`,`update companies set strategic_importance='low' where id='${est.id}'`,`insert into opportunities(company_id,campaign_id) values ('${est.id}','${campaign}')`,`update opportunities set stage='Perdido',reason='x' where id='${lid}'`,`insert into contacts(company_id,name) values ('${est.id}','x')`,`update contacts set name='x'`,`insert into activities(opportunity_id,result) values ('${lid}','Interessado')`,`insert into tasks(opportunity_id,title,due_at) values ('${lid}','x',now())`,`update tasks set done=false`,`insert into meetings(opportunity_id,starts_at) values ('${lid}',now())`,`update meetings set status='Cancelada'`,`insert into contracts(opportunity_id,origin,acquisition_owner) values ('${blid}','x','${admin}')`,`update contracts set pending_items='x'`,`insert into evaluations(opportunity_id,protocol_id,justification) values ('${lid}','${protocol}','x')`,`update operations set notes='x'`,`insert into categories(name) values ('x')`,`update categories set priority=1`,`update campaigns set name='x'`,`insert into protocols(campaign_id,version) values ('${campaign}',9)`,`update profiles set role='admin' where id='${viewer}'`,`insert into profiles(id,name,role) values ('${viewer}','x','admin')`,`delete from companies`,`delete from audit_log`];
 await ok('praxis_viewer não grava em nenhuma tabela pela API',async()=>{const snapshot=JSON.stringify((await db.query('select id,legal_name,commercial_status,strategic_importance from companies order by id')).rows);for(const sql of writes){try{await db.exec(sql)}catch{continue}const now=JSON.stringify((await db.query('select id,legal_name,commercial_status,strategic_importance from companies order by id')).rows);assert.equal(now,snapshot,sql)}assert.equal((await db.query(`select role from profiles where id='${viewer}'`)).rows[0].role,'praxis_viewer');assert.equal(Number((await db.query(`select count(*) n from opportunities where company_id='${est.id}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from contacts where name='x'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from categories where name='x'`)).rows[0].n),0);assert.equal((await db.query(`select stage from opportunities where id='${lid}'`)).rows[0].stage,'Contrato assinado')});
@@ -108,7 +108,7 @@ await ok('administrador vê último login, último acesso e acessos em 30 dias',
 await db.exec('reset role; set role anon;');
 await ok('anônimo não registra nem consulta acessos',async()=>{await denied(`select public.record_access('x')`);await denied('select * from public.access_overview()');await denied('select * from access_log')});
 await db.exec('reset role;');
-const companyTotal=await count('companies');
+let companyTotal=await count('companies');
 await db.exec('reset role; set role service_role;');
 await ok('API de servidor possui privilégios SQL explícitos',async()=>assert.equal(await count('profiles'),5));
 await ok('ativação antiga não expira, bloqueia concorrência e só permite um uso',async()=>{
@@ -126,12 +126,56 @@ await ok('ativação antiga não expira, bloqueia concorrência e só permite um
 });
 await as(viewer);
 await ok('viewer não lê segredos de ativação nem executa RPC de servidor',async()=>{await denied('select * from access_activations');await denied(`select * from claim_access_activation('${'a'.repeat(64)}',gen_random_uuid())`)});
+// ===== V1.2: empresas parceiras isoladas e parecer da empresa =====
+const viewer2='00000000-0000-0000-0000-000000000006';
+await as(admin);
+const buyer2=(await db.query(`insert into buyers(name) values ('Compradora sintética 2') returning id`)).rows[0].id;
+const campaign2=(await db.query(`insert into campaigns(buyer_id,name) values ('${buyer2}','Campanha sintética 2') returning id`)).rows[0].id;
+const protocol2=(await db.query(`insert into protocols(campaign_id,version) values ('${campaign2}',1) returning id`)).rows[0].id;
+const only2=(await db.query(`insert into companies(legal_name,participants) values ('Empresa só da compradora 2',8) returning id`)).rows[0].id;
+const lead2=(await db.query(`insert into opportunities(company_id,campaign_id) values ('${only2}','${campaign2}') returning id`)).rows[0].id;
+const shared2=(await db.query(`insert into opportunities(company_id,campaign_id) values ('${cid}','${campaign2}') returning id`)).rows[0].id;
+await db.exec(`insert into activities(opportunity_id,result) values ('${lead2}','Interessado')`);
+await db.exec(`reset role; insert into auth.users values ('${viewer2}'); insert into profiles(id,name,role,locale,buyer_id) values ('${viewer2}','Leitor compradora 2','praxis_viewer','pt-BR','${buyer2}');`);
+await ok('perfil de empresa parceira exige empresa vinculada',()=>denied(`reset role; insert into auth.users values ('00000000-0000-0000-0000-000000000099'); insert into profiles(id,name,role) values ('00000000-0000-0000-0000-000000000099','Sem empresa','praxis_viewer')`));
+await as(viewer);
+await ok('empresa parceira não vê leads, campanhas nem empresas de outra compradora',async()=>{for(const id of [lead2,shared2])assert.equal(Number((await db.query(`select count(*) n from opportunities where id='${id}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from companies where id='${only2}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from buyers where id='${buyer2}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from campaigns where id='${campaign2}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from protocols where id='${protocol2}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from activities where opportunity_id='${lead2}'`)).rows[0].n),0);assert.equal(Number((await db.query(`select count(*) n from audit_log where opportunity_id in ('${lead2}','${shared2}')`)).rows[0].n),0)});
+await as(viewer2);
+await ok('segunda empresa parceira vê somente os próprios leads',async()=>{assert.deepEqual((await db.query('select id from opportunities order by id')).rows.map(r=>r.id).sort(),[lead2,shared2].sort());assert.equal(await count('companies'),2);assert.equal(await count('activities'),1);assert.equal(await count('contracts'),0);assert.equal(await count('buyers'),1);assert.equal(await count('campaigns'),1);assert.equal(Number((await db.query(`select count(*) n from companies where id='${est.id}'`)).rows[0].n),0)});
+await ok('empresa parceira vê o total da rede sem acessar os registros',async()=>{const t=(await db.query('select * from public.network_totals()')).rows[0];await db.exec('reset role;');const all=await count('companies');const recording=Number((await db.query(`select count(*) n from companies where operational_status='recording'`)).rows[0].n);await as(viewer2);assert.equal(Number(t.total),all);assert.equal(Number(t.recording),recording);assert.ok(all>await count('companies'))});
+await ok('empresa parceira registra parecer no próprio lead com autoria do servidor',async()=>{const r=(await db.query(`insert into lead_reviews(opportunity_id,decision,comment,author_name,author_kind,buyer_id) values ('${lead2}','needs_info','Enviar fotos do ambiente','Nome falso','team','${buyer2}') returning *`)).rows[0];assert.equal(r.author_id,viewer2);assert.equal(r.author_name,'Leitor compradora 2');assert.equal(r.author_kind,'partner');assert.equal(r.buyer_id,buyer2)});
+await ok('parecer exige comentário, exceto aprovação',async()=>{await denied(`insert into lead_reviews(opportunity_id,decision) values ('${lead2}','rejected')`);await denied(`insert into lead_reviews(opportunity_id,decision,comment) values ('${lead2}','comment','  ')`);await db.exec(`insert into lead_reviews(opportunity_id,decision) values ('${shared2}','approved')`)});
+await ok('empresa parceira não registra parecer em lead de outra compradora',async()=>{await denied(`insert into lead_reviews(opportunity_id,decision) values ('${lid}','approved')`);const r=(await db.query(`insert into lead_reviews(opportunity_id,decision,comment,author_id) values ('${lead2}','comment','Autoria forjada','${viewer}') returning author_id`)).rows[0];assert.equal(r.author_id,viewer2)});
+await ok('parecer é imutável',async()=>{await denied(`update lead_reviews set decision='approved'`);await denied('delete from lead_reviews')});
+await ok('empresa parceira continua sem editar lead e empresa',async()=>{await denied(`insert into activities(opportunity_id,result) values ('${lead2}','Interessado')`);await db.exec(`update opportunities set stage='Perdido',reason='x' where id='${lead2}'`);await db.exec('reset role;');assert.equal((await db.query(`select stage from opportunities where id='${lead2}'`)).rows[0].stage,'Novo')});
+await as(viewer);
+await ok('parecer de outra compradora não aparece',async()=>assert.equal(await count('lead_reviews'),0));
+await as(a);await db.exec('reset role;');await db.exec(`update profiles set active=true where id='${a}'`);
+await as(admin);await db.exec(`update opportunities set owner_id='${a}' where id='${lead2}'`);
+await as(a);
+await ok('equipe responde com comentário, mas não aprova pela empresa',async()=>{const r=(await db.query(`insert into lead_reviews(opportunity_id,decision,comment) values ('${lead2}','comment','Fotos enviadas por e-mail') returning *`)).rows[0];assert.equal(r.author_kind,'team');await denied(`insert into lead_reviews(opportunity_id,decision) values ('${lead2}','approved')`);assert.equal(await count('lead_reviews'),3)});
+await as(b);
+await ok('prospector sem o lead não lê pareceres',async()=>assert.equal(await count('lead_reviews'),0));
+await as(admin);
+await db.exec(`insert into evaluations(opportunity_id,protocol_id,commercial_fit,active_demand,exception_authorized,exception_ref,justification) values ('${lead2}','${protocol2}',true,true,true,'EXC-SINT','Exceção sintética')`);
+const sign=`insert into contracts(opportunity_id,origin,acquisition_owner,signature_confirmed,signed_on,reference) values ('${lead2}','Parceria sintética','${a}',true,current_date,'SINT-2')`;
+await ok('assinatura bloqueada enquanto a empresa não aprova no CRM',()=>denied(sign));
+await as(viewer2);await db.exec(`insert into lead_reviews(opportunity_id,decision,comment) values ('${lead2}','approved','Aprovado para implantação')`);
+await as(admin);
+await ok('aprovação da empresa no CRM vale como aprovação formal',async()=>{await db.exec(sign);assert.equal(Number((await db.query(`select count(*) n from contracts where opportunity_id='${lead2}'`)).rows[0].n),1)});
+await as(viewer2);await db.exec(`insert into lead_reviews(opportunity_id,decision,comment) values ('${lead2}','rejected','Revisão: recusado')`);
+await as(admin);
+await ok('recusa posterior invalida a aprovação para nova assinatura',()=>denied(`update contracts set pending_items='Revisão' where opportunity_id='${lead2}'`));
+await db.exec('reset role; set role anon;');
+await ok('anônimo sem pareceres nem totais da rede',async()=>{await denied('select * from lead_reviews');await denied('select * from public.network_totals()')});
+await db.exec('reset role;');
+companyTotal=await count('companies');
 await db.exec('reset role; set role anon;');
 await ok('anônimo sem acesso',()=>denied('select * from companies'));
 await db.exec('reset role;');
 const image=await db.dumpDataDir();await db.close();
 const restored=await PGlite.create({loadDataDir:image});
-await ok('dados preservados após fechar e restaurar o banco PostgreSQL',async()=>{assert.equal(Number((await restored.query('select count(*) n from companies')).rows[0].n),companyTotal);assert.equal(Number((await restored.query('select count(*) n from contracts')).rows[0].n),1)});
+await ok('dados preservados após fechar e restaurar o banco PostgreSQL',async()=>{assert.equal(Number((await restored.query('select count(*) n from companies')).rows[0].n),companyTotal);assert.equal(Number((await restored.query('select count(*) n from contracts')).rows[0].n),2);assert.equal(Number((await restored.query('select count(*) n from lead_reviews')).rows[0].n),6)});
 await restored.close();
 // Migration incremental sobre base existente: aplica 0001–0006, grava dados e então aplica 0007.
 const legacy=new PGlite();
@@ -144,7 +188,11 @@ const plain=(await legacy.query(`insert into companies(legal_name) values ('Empr
 const ll=(await legacy.query(`insert into opportunities(company_id,campaign_id) values ('${lc.id}','${(await legacy.query('select id from campaigns')).rows[0].id}') returning id`)).rows[0].id;
 await legacy.exec(`insert into evaluations(opportunity_id,protocol_id,commercial_fit,technical_fit,active_demand,buyer_approved,buyer_approval_ref,answers,justification) select '${ll}',id,true,true,true,true,'REF','{"company_active":true,"compatible_activity":true,"professional_environment":true,"outside_home":true,"two_tasks":true,"authorization":true,"safety":true}','ok' from protocols; insert into contracts(opportunity_id,origin,acquisition_owner,signature_confirmed,signed_on,reference) values ('${ll}','x','${admin}',true,current_date,'C-1'); reset request.jwt.claim.sub;`);
 const auditBefore=Number((await legacy.query('select count(*) n from audit_log')).rows[0].n);
-for(const file of files.filter(f=>f>='202610290007'))await legacy.exec(await readFile('supabase/migrations/'+file,'utf8'));
+for(const file of files.filter(f=>f>='202610290007'&&f<'202611160010'))await legacy.exec(await readFile('supabase/migrations/'+file,'utf8'));
+// Leitor Praxis existente antes da V1.2: deve ser vinculado à Praxis Robotics pela migration.
+await legacy.exec(`insert into auth.users values ('${viewer}'); insert into profiles(id,name,role) values ('${viewer}','Leitor existente','praxis_viewer');`);
+for(const file of files.filter(f=>f>='202611160010'))await legacy.exec(await readFile('supabase/migrations/'+file,'utf8'));
+await ok('migration V1.2 vincula leitores existentes à Praxis Robotics',async()=>assert.equal((await legacy.query(`select b.name from profiles p join buyers b on b.id=p.buyer_id where p.id='${viewer}'`)).rows[0].name,'Praxis Robotics'));
 await ok('migration preserva cadastros existentes e marca somente fatos registrados',async()=>{const r=(await legacy.query(`select * from companies where id='${lc.id}'`)).rows[0];assert.equal(r.legal_name,'Empresa existente');assert.equal(r.notes,'Observação original');assert.equal(r.participants,7);assert.equal(r.commercial_status,'contracted');assert.equal(r.operational_status,'not_started');assert.equal(r.updated_at.getTime(),lc.created_at.getTime());const p=(await legacy.query(`select commercial_status,strategic_importance from companies where id='${plain.id}'`)).rows[0];assert.deepEqual([p.commercial_status,p.strategic_importance],['registered','not_assessed']);assert.equal(Number((await legacy.query('select count(*) n from company_status_history')).rows[0].n),2);assert.ok(Number((await legacy.query('select count(*) n from audit_log')).rows[0].n)>=auditBefore)});
 await legacy.close();
 console.log(`\n${passed} testes PostgreSQL/RLS passaram. Auth HTTP e Supabase hospedado exigem validação após configuração.`);
