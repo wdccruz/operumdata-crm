@@ -109,9 +109,32 @@ revoke all on function public.google_apply_meeting_change(uuid,uuid,timestamptz,
 do $$ begin if exists(select 1 from pg_roles where rolname='anon') then revoke all on function public.google_apply_meeting_change(uuid,uuid,timestamptz,int,boolean) from anon,authenticated; end if; end $$;
 grant execute on function public.google_apply_meeting_change(uuid,uuid,timestamptz,int,boolean) to service_role;
 
--- 5. Sincronização automática a cada minuto (pg_cron + pg_net), só no Supabase hospedado.
--- URL do projeto e chave da sincronização ficam no Vault (nomes project_url e google_sync_key),
--- nunca no repositório. Sem os segredos, a rotina não faz nada.
+-- 5. Segredos gerados no próprio banco (Vault): assinatura do OAuth e chave do agendamento.
+-- Ninguém precisa digitá-los; só a Edge Function (service_role) os lê por esta função.
+create function public.google_secret(p_name text) returns text language plpgsql stable security definer set search_path='' as $$
+declare v text;
+begin
+ if p_name not in ('google_state_secret','google_sync_key') or to_regclass('vault.decrypted_secrets') is null then return null; end if;
+ execute 'select decrypted_secret from vault.decrypted_secrets where name=$1' into v using p_name;
+ return v;
+end $$;
+revoke all on function public.google_secret(text) from public;
+do $$ begin if exists(select 1 from pg_roles where rolname='anon') then revoke all on function public.google_secret(text) from anon,authenticated; end if; end $$;
+grant execute on function public.google_secret(text) to service_role;
+
+do $$ declare n text; begin
+ if to_regclass('vault.secrets') is not null then
+  foreach n in array array['google_state_secret','google_sync_key'] loop
+   if not exists(select 1 from vault.secrets where name=n) then
+    execute 'select vault.create_secret($1,$2)' using replace(gen_random_uuid()::text||gen_random_uuid()::text,'-',''),n;
+   end if;
+  end loop;
+ end if;
+end $$;
+
+-- 6. Sincronização automática a cada minuto (pg_cron + pg_net), só no Supabase hospedado.
+-- URL do projeto (project_url) e chave da sincronização (google_sync_key) ficam no Vault,
+-- nunca no repositório. Sem eles, a rotina não faz nada.
 create function private.google_sync_tick() returns void language plpgsql security definer set search_path='' as $$
 declare u text; k text;
 begin

@@ -87,9 +87,9 @@ on conflict (id) do update set role='praxis_viewer',active=true,buyer_id=exclude
 
 1. No Google Cloud, crie um projeto, ative a **Google Calendar API**, configure a tela de consentimento (tipo Externo, publicada em produção para o token não expirar em 7 dias) e crie um **ID do cliente OAuth** do tipo Aplicativo da Web, com URI de redirecionamento `https://SEU_PROJETO.supabase.co/functions/v1/google-calendar`.
 2. Aplique a migration `202611160011_google_calendar.sql`.
-3. Defina os segredos da função (nunca no repositório): `supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... GOOGLE_STATE_SECRET=<aleatório> GOOGLE_SYNC_KEY=<aleatório>` (`APP_URL` já existe).
+3. Defina os segredos da função (nunca no repositório): `supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...` (`APP_URL` já existe). A assinatura do OAuth e a chave do agendamento são geradas pela migration no Vault (`google_state_secret`, `google_sync_key`).
 4. Publique a função: `supabase functions deploy google-calendar` (usa `verify_jwt = false`; a função valida a sessão, o estado assinado do OAuth e a chave do agendamento).
-5. Grave no Vault os segredos usados pelo agendamento: `select vault.create_secret('https://SEU_PROJETO.supabase.co','project_url'); select vault.create_secret('<mesmo GOOGLE_SYNC_KEY>','google_sync_key');`
+5. Grave no Vault a URL do projeto usada pelo agendamento: `select vault.create_secret('https://SEU_PROJETO.supabase.co','project_url');`
 
 ## Arquitetura
 

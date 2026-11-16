@@ -176,7 +176,7 @@ await as(admin);
 await ok('compromissos do Google visíveis só ao dono, nem ao administrador alheio',async()=>{const r=(await db.query('select title from calendar_events')).rows;assert.deepEqual(r.map(x=>x.title),['Consulta pessoal'])});
 await ok('navegador não lê tokens do Google nem vínculos',async()=>{await denied('select * from google_connections');await denied('select * from meeting_google_events');await denied(`insert into calendar_events(user_id,google_event_id,starts_at,ends_at) values ('${admin}','x',now(),now())`)});
 await ok('situação da conexão sem token',async()=>{const r=(await db.query('select * from public.my_google_connection()')).rows;assert.equal(r.length,1);assert.equal(r[0].google_email,'admin@example.test');assert.ok(!('refresh_token' in r[0]))});
-await ok('usuário comum não chama funções do servidor do Google',async()=>{await denied(`select * from public.google_meeting_feed('${admin}')`);await denied(`select public.google_apply_meeting_change('${admin}','${mid}',now(),30,false)`)});
+await ok('usuário comum não chama funções do servidor do Google',async()=>{await denied(`select * from public.google_meeting_feed('${admin}')`);await denied(`select public.google_apply_meeting_change('${admin}','${mid}',now(),30,false)`);await denied(`select public.google_secret('google_sync_key')`)});
 await as(a);
 await ok('agente vê só o próprio compromisso do Google',async()=>assert.deepEqual((await db.query('select title from calendar_events')).rows.map(x=>x.title),['Compromisso do agente']));
 await as(viewer);

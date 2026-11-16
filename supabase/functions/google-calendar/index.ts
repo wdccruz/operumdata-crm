@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { CRM_TAG, eventHash, googleToPersonal, inWindow, meetingChange, meetingToEvent, readState, removedFromGoogle, signState, type FeedMeeting, type GoogleEvent } from './calendar.ts';
 // Sincronização da agenda do CRM com o Google Agenda nos dois sentidos.
 // Executada apenas no servidor. Segredos (configurar no Supabase, nunca no Vite nem no repositório):
-// GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_STATE_SECRET, GOOGLE_SYNC_KEY, APP_URL.
+// GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e APP_URL. A assinatura do OAuth e a chave do
+// agendamento são geradas no Vault pela migration 0011 e lidas por public.google_secret().
 const env=(k:string)=>Deno.env.get(k)||'';
 const appUrl=env('APP_URL'), origin=appUrl?new URL(appUrl).origin:'';
 const allowed=new Set([origin,...env('ALLOWED_ORIGINS').split(',').map(v=>v.trim()).filter(Boolean).map(v=>new URL(v).origin)].filter(Boolean));
@@ -10,6 +11,7 @@ const supabaseUrl=env('SUPABASE_URL'), redirectUri=`${supabaseUrl}/functions/v1/
 const API='https://www.googleapis.com/calendar/v3';
 const SCOPES='openid email https://www.googleapis.com/auth/calendar.events';
 const teamRoles=['admin','prospector','commercial'];
+const secret=async(db:SupabaseClient,name:string)=>{const{data}=await db.rpc('google_secret',{p_name:name});return typeof data==='string'&&data.length>=32?data:''};
 const server=()=>createClient(supabaseUrl,env('SUPABASE_SERVICE_ROLE_KEY'),{auth:{persistSession:false,autoRefreshToken:false}});
 
 class GoogleError extends Error{constructor(public status:number,message:string){super(message)}}
@@ -111,15 +113,16 @@ async function syncUser(db:SupabaseClient,userId:string):Promise<Summary|{busy:t
 }
 
 async function callback(url:URL){
+ const db=server();
  const back=(result:string)=>Response.redirect(`${appUrl}${appUrl.includes('?')?'&':'?'}google=${result}`,302);
  if(!appUrl)return new Response('APP_URL não configurada',{status:503});
- const user=await readState(env('GOOGLE_STATE_SECRET'),url.searchParams.get('state')||'');
+ const stateSecret=await secret(db,'google_state_secret');
+ const user=stateSecret?await readState(stateSecret,url.searchParams.get('state')||''):undefined;
  const code=url.searchParams.get('code');
  if(!user||!code)return back('erro');
  try{
   const t=await tokenRequest({grant_type:'authorization_code',code,redirect_uri:redirectUri});
   if(!t.refresh_token)return back('erro');
-  const db=server();
   const {data:p}=await db.from('profiles').select('role,active').eq('id',user).single();
   if(!p?.active||!teamRoles.includes(p.role))return back('erro');
   const {error}=await db.from('google_connections').upsert({user_id:user,google_email:emailFromIdToken(t.id_token),refresh_token:t.refresh_token,calendar_id:'primary',sync_token:null,status:'active',last_error:null,sync_lock_until:null,connected_at:new Date().toISOString()},{onConflict:'user_id'});
@@ -138,13 +141,13 @@ Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response('ok',{headers:cors});
  const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json'}});
  if(req.method!=='POST')return reply({error:'Método não permitido'},405);
- if(!appUrl||!env('GOOGLE_CLIENT_ID')||!env('GOOGLE_CLIENT_SECRET')||!env('GOOGLE_STATE_SECRET'))return reply({error:'Integração com o Google ainda não configurada'},503);
+ if(!appUrl||!env('GOOGLE_CLIENT_ID')||!env('GOOGLE_CLIENT_SECRET'))return reply({error:'Integração com o Google ainda não configurada'},503);
  let body:{action?:string}={};try{body=await req.json()}catch{return reply({error:'Requisição inválida'},400)}
  const db=server();
 
  // Agendamento (pg_cron): chave própria, comparada no servidor.
  if(body.action==='cron'){
-  const key=env('GOOGLE_SYNC_KEY');
+  const key=await secret(db,'google_sync_key');
   if(!key||req.headers.get('x-sync-key')!==key)return reply({error:'Não autorizado'},401);
   const {data}=await db.from('google_connections').select('user_id').eq('status','active');
   const results=[];for(const c of data||[])results.push(await syncUser(db,c.user_id));
@@ -159,7 +162,8 @@ Deno.serve(async req=>{
  if(!profile?.active||!teamRoles.includes(profile.role))return reply({error:'Disponível somente para a equipe OperumData'},403);
 
  if(body.action==='connect'){
-  const q=new URLSearchParams({client_id:env('GOOGLE_CLIENT_ID'),redirect_uri:redirectUri,response_type:'code',scope:SCOPES,access_type:'offline',prompt:'consent',include_granted_scopes:'true',state:await signState(env('GOOGLE_STATE_SECRET'),user.id)});
+  if(!await secret(db,'google_state_secret'))return reply({error:'Integração com o Google ainda não configurada'},503);
+  const q=new URLSearchParams({client_id:env('GOOGLE_CLIENT_ID'),redirect_uri:redirectUri,response_type:'code',scope:SCOPES,access_type:'offline',prompt:'consent',include_granted_scopes:'true',state:await signState(await secret(db,'google_state_secret'),user.id)});
   return reply({url:`https://accounts.google.com/o/oauth2/v2/auth?${q}`});
  }
  if(body.action==='sync'){
