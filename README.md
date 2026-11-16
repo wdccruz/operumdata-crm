@@ -73,6 +73,24 @@ where u.email='EMAIL_DO_USUARIO' and b.name='NOME DA EMPRESA PARCEIRA'
 on conflict (id) do update set role='praxis_viewer',active=true,buyer_id=excluded.buyer_id;
 ```
 
+## Versão 1.3 — Agenda sincronizada com o Google Agenda
+
+- Cada pessoa da equipe OperumData (administrador, prospector, comercial) pode conectar a própria conta Google na página **Agenda**.
+- **CRM → Google:** as reuniões que a pessoa já pode ver no CRM vão para a agenda principal dela no Google, com empresa, decisor, formato e link. Resultado e próxima ação não saem do CRM. Reunião cancelada no CRM sai do Google.
+- **Google → CRM:** os eventos da agenda principal do Google aparecem na Agenda do CRM **somente para o dono da conta**. O banco bloqueia a leitura para qualquer outro usuário, inclusive administradores e empresas parceiras (tabela `calendar_events`, política restritiva por `user_id`).
+- Mudar o horário ou excluir no Google uma reunião criada pelo CRM reagenda ou cancela a reunião no CRM, com autoria registrada no histórico.
+- A sincronização roda a cada minuto (pg_cron + pg_net) e também logo depois de salvar uma reunião ou ao clicar em **Sincronizar agora**.
+- Tokens do Google ficam só no servidor (`google_connections`, sem nenhuma permissão para o navegador). Desconectar remove do Google os eventos criados pelo CRM e revoga o acesso.
+- A agenda usada fica em `google_connections.calendar_id` (padrão `primary`), o que permite trocar por uma agenda exclusiva no futuro.
+
+### Aplicar a V1.3
+
+1. No Google Cloud, crie um projeto, ative a **Google Calendar API**, configure a tela de consentimento (tipo Externo, publicada em produção para o token não expirar em 7 dias) e crie um **ID do cliente OAuth** do tipo Aplicativo da Web, com URI de redirecionamento `https://SEU_PROJETO.supabase.co/functions/v1/google-calendar`.
+2. Aplique a migration `202611160011_google_calendar.sql`.
+3. Defina os segredos da função (nunca no repositório): `supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... GOOGLE_STATE_SECRET=<aleatório> GOOGLE_SYNC_KEY=<aleatório>` (`APP_URL` já existe).
+4. Publique a função: `supabase functions deploy google-calendar` (usa `verify_jwt = false`; a função valida a sessão, o estado assinado do OAuth e a chave do agendamento).
+5. Grave no Vault os segredos usados pelo agendamento: `select vault.create_secret('https://SEU_PROJETO.supabase.co','project_url'); select vault.create_secret('<mesmo GOOGLE_SYNC_KEY>','google_sync_key');`
+
 ## Arquitetura
 
 - React 19 + TypeScript, Vite, Tailwind 4 e CSS institucional. Ícones Lucide, CSV com PapaParse.
@@ -82,6 +100,7 @@ on conflict (id) do update set role='praxis_viewer',active=true,buyer_id=exclude
 - `src/Editor.tsx`: formulários reutilizáveis com validação, mensagens e bloqueio durante salvamento.
 - `src/App.tsx`: navegação, ficha por abas e módulos comerciais. `src/Establishments.tsx`: listagem e ficha de estabelecimentos. `src/i18n.ts` e `src/locales/en-US.ts`: idiomas. `src/style.css`: tema e responsividade.
 - `supabase/migrations`: esquema normalizado, índices, privilégios, RLS, auditoria e triggers de integridade. Aplique todos os arquivos na ordem do nome.
+- `supabase/functions/google-calendar`: conexão OAuth e sincronização com o Google Agenda (regras puras em `calendar.ts`).
 - `supabase/functions/manage-users`: convite administrativo. A chave `service_role` existe exclusivamente no servidor.
 - `scripts/test-db.mjs`: integração PostgreSQL/RLS com contas sintéticas.
 - `scripts/test-hosted.mjs`: homologação explícita contra Supabase real; credencial de servidor apenas em runtime local restrito, nunca em CI ou no frontend.
