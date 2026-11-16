@@ -234,4 +234,13 @@ export const en:Record<string,string>={
 'Autorização do Google expirada ou revogada. Conecte novamente.':'Google authorization expired or was revoked. Please connect again.',
 'Integração com o Google ainda não configurada':'Google integration is not configured yet',
 'Disponível somente para a equipe OperumData':'Available to the OperumData team only',
+'+{{n}} mais':'+{{n}} more',
+'Hoje':'Today',
+'Lista':'List',
+'Mês':'Month',
+'Próximo':'Next',
+'Reunião do CRM':'CRM meeting',
+'Semana':'Week',
+'Seu Google Agenda (só você vê)':'Your Google Calendar (only you see it)',
+'Visualização':'View',
 };

@@ -146,7 +146,35 @@ test('agenda sincronizada com o Google: status, compromisso pessoal e sincroniza
  await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();
  if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Agenda',exact:true}).click();
  await expect(page.getByText('Conectado como agenda@example.invalid',{exact:false})).toBeVisible();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();
  await expect(page.getByText('Consulta pessoal sintética',{exact:false})).toBeVisible();await expect(page.getByText('Google Agenda · só você vê')).toBeVisible();
  await expect(page.getByText('Evento de outra pessoa')).toHaveCount(0);
  await page.getByRole('button',{name:'Sincronizar agora'}).click();await expect(page.getByText('Agenda sincronizada com o Google.')).toBeVisible();expect(actions).toContain('sync');
+});
+
+test('agenda em calendário: mês, semana e lista com reuniões do CRM e compromissos do Google (API simulada)',async({page})=>{
+ const now=new Date(),at=(d:number,h:number,m=0)=>{const x=new Date(now);x.setDate(x.getDate()+d);x.setHours(h,m,0,0);return x.toISOString()};
+ const user={id:uid,email:'admin@example.invalid',app_metadata:{provider:'email'},user_metadata:{},aud:'authenticated',created_at:now.toISOString()};
+ const cid='10000000-0000-0000-0000-000000000001',lid='20000000-0000-0000-0000-000000000001';
+ const tables:Record<string,any[]>={profiles:[{id:uid,name:'Admin sintético',role:'admin',active:true,locale:'pt-BR'}],companies:[{id:cid,legal_name:'Padaria Sintética'}],opportunities:[{id:lid,company_id:cid,campaign_id:null,owner_id:uid,stage:'Reunião agendada',priority:2}],
+  meetings:[{id:'30000000-0000-0000-0000-000000000001',opportunity_id:lid,starts_at:at(0,10),duration_minutes:45,format:'Vídeo',status:'Agendada'}],
+  calendar_events:[{id:'e1',user_id:uid,google_event_id:'g1',title:'Dentista sintético',starts_at:at(0,14),ends_at:at(0,15),all_day:false}]};
+ await page.route('https://crm-test.supabase.co/**',async route=>{
+ const request=route.request(),url=new URL(request.url());let body:any=[];
+ if(url.pathname.includes('/auth/v1/token'))body={access_token:'a',refresh_token:'r',token_type:'bearer',expires_in:3600,user};
+ else if(url.pathname.includes('/auth/v1/user'))body=user;
+ else if(url.pathname.includes('/rest/v1/rpc/'))body=true;
+ else if(url.pathname.includes('/rest/v1/'))body=tables[url.pathname.split('/').pop()!]||[];
+ await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(body)});
+ });
+ await page.goto('./');await page.getByLabel('E-mail corporativo').fill('admin@example.invalid');await page.getByLabel('Senha',{exact:true}).fill('synthetic-password');await page.getByRole('button',{name:'Entrar no CRM'}).click();
+ await expect(page.getByRole('heading',{name:'Visão da operação'})).toBeVisible();
+ if(test.info().project.name==='mobile')await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Agenda',exact:true}).click();
+ await page.getByRole('button',{name:'Mês',exact:true}).click();
+ if(test.info().project.name==='desktop'){await expect(page.locator('.cal-day.today .cal-item.meeting')).toContainText('Padaria Sintética');await expect(page.locator('.cal-day.today .cal-item.google')).toContainText('Dentista sintético')}
+ else await expect(page.locator('.cal-day.today .cal-dot')).toHaveCount(2);
+ await page.getByRole('button',{name:'Semana',exact:true}).click();
+ await expect(page.locator('.cal-event.meeting')).toContainText('Padaria Sintética');await expect(page.locator('.cal-event.google')).toContainText('Dentista sintético');
+ await page.locator('.cal-event.meeting').click();await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'Fechar'}).click();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();await expect(page.getByText('Google Agenda · só você vê')).toBeVisible();
 });
