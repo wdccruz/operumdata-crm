@@ -1,6 +1,6 @@
 // Extrai textos de interface (chaves pt-BR) do código-fonte para conferir o dicionário en-US.
 import {readFile} from 'node:fs/promises';
-const files=['src/App.tsx','src/GoogleAgenda.tsx','src/Establishments.tsx','src/CsvImport.tsx','src/Editor.tsx','src/domain.ts','src/db.ts'];
+const files=['src/App.tsx','src/GoogleAgenda.tsx','src/Calendar.tsx','src/Establishments.tsx','src/CsvImport.tsx','src/Editor.tsx','src/domain.ts','src/db.ts'];
 const skip=/^(https?:|[a-z_]+$|[a-z]+[-_][a-z_-]+$|[A-Z]{2}$|\{\{|[a-z]+\/|[\d\W]+$|.*\.(csv|png)$)/;
 export async function uiStrings(){
  const out=new Set();
