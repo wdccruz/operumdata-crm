@@ -22,7 +22,7 @@ Foram aprovadas 13 validações no serviço hospedado, incluindo login, persist�
 
 **Idiomas.** Português (pt-BR, padrão) e inglês (en-US) com `react-i18next`. As chaves são os próprios textos em português (`src/locales/en-US.ts` traduz). O seletor PT/EN fica no cabeçalho e na tela de entrada; a preferência é salva por usuário em `profiles.locale` pela função `public.set_my_locale`. Textos livres digitados pelos operadores não são traduzidos. `tests/i18n.test.ts` falha se algum texto de interface ficar sem tradução.
 
-**Perfil `praxis_viewer`.** Leitura integral de todos os módulos (dashboard, empresas, leads, oportunidades, prospecção, agenda, contratos, avaliações, operação, histórico, auditoria e relatórios), no mesmo CRM, com as funções de edição ocultas. O bloqueio é feito no banco: políticas RLS `RESTRICTIVE` exigem perfil de escrita (`admin`, `prospector`, `commercial`) para qualquer INSERT/UPDATE/DELETE em todas as tabelas públicas, inclusive por chamada direta à API. Configurações e gestão de usuários não aparecem para esse perfil. Nenhum segredo de Auth, hash de senha ou chave administrativa é acessível pelo cliente.
+**Perfil `praxis_viewer`.** (Na V1.2 a leitura passou a ser limitada aos leads da própria empresa; veja abaixo.) Leitura integral de todos os módulos (dashboard, empresas, leads, oportunidades, prospecção, agenda, contratos, avaliações, operação, histórico, auditoria e relatórios), no mesmo CRM, com as funções de edição ocultas. O bloqueio é feito no banco: políticas RLS `RESTRICTIVE` exigem perfil de escrita (`admin`, `prospector`, `commercial`) para qualquer INSERT/UPDATE/DELETE em todas as tabelas públicas, inclusive por chamada direta à API. Configurações e gestão de usuários não aparecem para esse perfil. Nenhum segredo de Auth, hash de senha ou chave administrativa é acessível pelo cliente.
 
 ### Aplicar a V1.1 no Supabase
 
@@ -40,18 +40,38 @@ Configurações > **Registro de acessos** (somente administrador) mostra, por us
 
 Cada abertura do CRM com sessão válida grava um acesso pela função `public.record_access`, no máximo um a cada 30 minutos por usuário. Ninguém consegue gravar, alterar ou apagar registros diretamente nem registrar acesso em nome de outro usuário. A consulta usa `public.access_overview`, que recusa quem não é administrador. Exige a migration `202610300009_access_log.sql`; antes dela, a seção mostra um aviso e o restante do CRM funciona normalmente. Abrir o link sem fazer login não gera registro, e o GitHub Pages não fornece log de visitas.
 
-### Criar um usuário de leitura da Praxis
+## Versão 1.2 — empresas parceiras isoladas e parecer da empresa
 
-1. Authentication > Users > **Invite user** com o e-mail corporativo do usuário. Não use senha fixa ou previsível; o convidado define a própria senha (mínimo 12 caracteres) ao abrir o link.
-2. No SQL Editor, vincule o perfil de leitura e o idioma inglês (substitua o e-mail):
+**Cada empresa parceira vê somente os próprios leads.** Empresa parceira é o comprador (`buyers`, Configurações > Empresas parceiras). Cada lead pertence a uma campanha e cada campanha a uma empresa. O usuário externo tem o perfil **Empresa parceira · leitura e parecer** (código estável `praxis_viewer`) e fica vinculado a uma empresa em `profiles.buyer_id`.
+
+- A empresa lê os leads das campanhas dela e, desses leads, os estabelecimentos, contatos, interações, tarefas, reuniões, avaliações, contratos, operação, produção, histórico de status e auditoria. Não vê leads, campanhas, protocolos ou estabelecimentos de outras empresas, nem estabelecimentos sem lead na campanha dela, nem a equipe.
+- O bloqueio é feito no banco: a política `viewer_read` passou a ser limitada pela empresa e uma política `RESTRICTIVE` (`partner_scope`) impõe o mesmo limite em todas as tabelas, inclusive por chamada direta à API.
+- Um estabelecimento com leads em campanhas de duas empresas aparece para as duas (o cadastro é único); os leads, interações e pareceres continuam separados.
+- **Total da rede**: o painel da empresa mostra o total de estabelecimentos cadastrados e os totais por status pela função `public.network_totals()`, que devolve somente contagens.
+- A empresa continua sem editar nada além do parecer.
+
+**Parecer da empresa** (`lead_reviews`): na ficha do lead, aba **Parecer da empresa**, a empresa registra *Aprovado*, *Recusado*, *Precisa de mais informações* ou *Comentário*, com texto (obrigatório, exceto para Aprovado). A equipe pode responder com comentário, mas não aprova pela empresa. Autor, nome, empresa e data são definidos pelo servidor; o parecer não pode ser alterado nem apagado. A lista de leads mostra a situação do parecer e tem o filtro "Parecer da empresa" (inclusive "Aguardando parecer").
+
+**Aprovação formal**: o último parecer decisivo *Aprovado* da empresa no CRM vale como aprovação individual exigida pelo protocolo para assinar o contrato. Um parecer posterior de recusa ou pedido de informações suspende a aprovação. A marcação manual na avaliação ("recebida fora do CRM") continua válida.
+
+### Aplicar a V1.2 no Supabase
+
+1. Aplique `supabase/migrations/202611160010_partner_isolation.sql`. Os usuários `praxis_viewer` existentes são vinculados automaticamente à Praxis Robotics. Enquanto ela não estiver aplicada, a aba de parecer mostra um aviso.
+2. Publique a função atualizada para convidar empresas parceiras pela interface: `supabase functions deploy manage-users`.
+
+### Cadastrar uma nova empresa parceira
+
+1. Configurações > **Empresas parceiras** > Adicionar: nome da empresa.
+2. Configurações > **Campanhas**: crie a campanha da empresa e, em **Protocolos**, publique a versão de critérios.
+3. Crie os leads nessa campanha.
+4. Configurações > Equipe > Convidar usuário, perfil "Empresa parceira · leitura e parecer" e a empresa. Alternativa pelo SQL Editor, após convidar em Authentication > Users (substitua nome, e-mail e empresa):
 
 ```sql
-insert into public.profiles(id,name,role,active,locale)
-select id,'NOME DO USUÁRIO','praxis_viewer',true,'en-US' from auth.users where email='EMAIL_DO_USUARIO'
-on conflict (id) do update set role='praxis_viewer',active=true,locale='en-US';
+insert into public.profiles(id,name,role,active,locale,buyer_id)
+select u.id,'NOME DO USUÁRIO','praxis_viewer',true,'pt-BR',b.id from auth.users u, public.buyers b
+where u.email='EMAIL_DO_USUARIO' and b.name='NOME DA EMPRESA PARCEIRA'
+on conflict (id) do update set role='praxis_viewer',active=true,buyer_id=excluded.buyer_id;
 ```
-
-Alternativa: Configurações > Equipe > Convidar usuário, perfil "Praxis · somente leitura" (requer a função publicada no passo 2 acima).
 
 ## Arquitetura
 
@@ -97,6 +117,7 @@ Endereço local: `http://localhost:5173/operumdata-crm/`. As variáveis pública
    - `supabase/migrations/202610290007_establishments_v11.sql`
    - `supabase/migrations/202610290008_access_activations.sql`
    - `supabase/migrations/202610300009_access_log.sql`
+   - `supabase/migrations/202611160010_partner_isolation.sql`
 3. Alternativa usando CLI instalada: `supabase login`, `supabase link --project-ref SEU_PROJECT_REF`, `supabase db push`. Use o histórico de migrations; não reaplique manualmente uma migration já aplicada.
 4. Em Authentication > Sign In / Providers, **desabilite Allow new users to sign up**. O arquivo `supabase/config.toml` documenta a configuração local; ele não substitui a verificação do painel hospedado.
 5. Em Authentication > URL Configuration, defina Site URL como a URL final do frontend e adicione URLs de redirecionamento exatas, incluindo o caminho `/operumdata-crm/`. Para desenvolvimento, autorize também `http://localhost:5173/operumdata-crm/` e `http://127.0.0.1:5173/operumdata-crm/`.
@@ -130,7 +151,7 @@ Desative um usuário em Configurações > Equipe > Editar acesso. O RLS consulta
 
 ## Segurança e regras de negócio
 
-Administrador tem acesso completo; `praxis_viewer` lê tudo e não grava nada; prospector trabalha nas oportunidades atribuídas; comercial somente nas oportunidades em que é responsável ou comercial autorizado. Somente administrador reatribui leads. Contatos de uma empresa são compartilhados somente entre usuários autorizados para essa empresa. Não distribua oportunidades da mesma empresa para prospectores que devam ser isolados entre si: eles compartilham o cadastro da empresa, enquanto as oportunidades e atividades continuam isoladas.
+Administrador tem acesso completo; empresa parceira (`praxis_viewer`) lê somente os leads das campanhas da própria empresa e grava somente o parecer; prospector trabalha nas oportunidades atribuídas; comercial somente nas oportunidades em que é responsável ou comercial autorizado. Somente administrador reatribui leads. Contatos de uma empresa são compartilhados somente entre usuários autorizados para essa empresa. Não distribua oportunidades da mesma empresa para prospectores que devam ser isolados entre si: eles compartilham o cadastro da empresa, enquanto as oportunidades e atividades continuam isoladas.
 
 Contratos, avaliações, operação e respectivas entradas de auditoria não são visíveis para prospectores. Cadastro público desabilitado, perfil obrigatório e políticas server-side evitam confiar no frontend. Protocolos e avaliações são imutáveis; publique nova versão e registre nova avaliação. A autoria de atividades é a do usuário autenticado. Histórico e registros comerciais não podem ser apagados pelo cliente, inclusive pelo administrador via UI. Exclusão e anonimização seguem procedimento controlado abaixo.
 

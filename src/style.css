@@ -12,3 +12,8 @@
 .panel h3{font:10px monospace;letter-spacing:1px;text-transform:uppercase;color:#8e949e;margin:22px 0 4px}.callout.hint{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.callout.hint button{font-size:11px}
 @media(max-width:760px){.status-row{grid-template-columns:1fr}.metric-grid.network{grid-template-columns:repeat(2,1fr)}.topbar .lang-switch button{padding:5px 6px}.topbar .badge.readonly{display:none}}
 tr.clickable{cursor:pointer}tr.clickable .text-button{text-decoration:underline;text-decoration-color:#ff5a1f66;text-underline-offset:3px}.open-record{font-size:11px;white-space:nowrap;color:#ff875b;border-color:#68402f}
+/* Parecer da empresa parceira */
+.badge.review-approved{color:#7fd8a4;border-color:#2f5a42;background:#7fd8a40c}
+.badge.review-rejected{color:#ff875b;border-color:#68402f;background:#ff5a1f0c}
+.badge.review-needs_info{color:#f2c46d;border-color:#5f4d2c}
+.badge.review-pending,.badge.review-comment{color:#9aa2ad}

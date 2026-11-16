@@ -60,3 +60,8 @@ export function deviceSummary(ua?:string|null){
  const os=/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac OS X|Macintosh/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'';
  return os?`${browser} · ${os}`:browser;
 }
+// Parecer da empresa parceira no lead (tabela lead_reviews, migration 0010).
+export const reviewDecisions:[string,string][]=[['approved','Aprovado'],['rejected','Recusado'],['needs_info','Precisa de mais informações'],['comment','Comentário']];
+export const reviewLabel=(code?:string)=>reviewDecisions.find(([c])=>c===code)?.[1]||'Aguardando parecer';
+// Último parecer decisivo da empresa (comentários não mudam a decisão).
+export function latestDecision(reviews:Row[],lid:string):Row|undefined{return reviews.filter(r=>r.opportunity_id===lid&&r.author_kind==='partner'&&r.decision!=='comment').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]}

@@ -7,18 +7,19 @@ export const configured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.me
 export const db = createClient(import.meta.env.VITE_SUPABASE_URL || 'https://unconfigured.supabase.co', import.meta.env.VITE_SUPABASE_ANON_KEY || 'not-configured', { auth: { persistSession: true, storage: sessionStorage, detectSessionInUrl: true, autoRefreshToken: true } });
 // Somente a sessão fica em sessionStorage. Todos os dados comerciais vêm do PostgreSQL.
 export type Row = Record<string, any>;
-export const tables = ['companies','contacts','opportunities','activities','tasks','meetings','categories','buyers','campaigns','protocols','evaluations','contracts','operations','production','profiles','audit_log','company_status_history'] as const;
+export const tables = ['companies','contacts','opportunities','activities','tasks','meetings','categories','buyers','campaigns','protocols','evaluations','contracts','operations','production','profiles','audit_log','company_status_history','lead_reviews'] as const;
 export type Store = Record<(typeof tables)[number], Row[]>;
 export const emptyStore = Object.fromEntries(tables.map(t=>[t,[] as Row[]])) as Store;
 // Tabela criada pela migration V1.1. Enquanto ela não estiver aplicada, a aplicação continua
 // funcionando com o modelo anterior e avisa o administrador (sem dados simulados).
-export const schema={v11:true};
+// lead_reviews (parecer da empresa) vem da migration 0010; antes dela a ficha mostra um aviso.
+export const schema={v11:true,v12:true};
 const missing=(e:{code?:string})=>['PGRST205','42P01','PGRST202','42883'].includes(e.code||'');
 export async function loadStore(): Promise<Store> {
- schema.v11=true;
+ schema.v11=true;schema.v12=true;
  const results = await Promise.all(tables.map(async table=> {
   const rows:Row[]=[]; let from=0;
-  while(true){ const {data,error}=await db.from(table).select('*').order(table==='audit_log'?'occurred_at':'id').range(from,from+499); if(error){ if(table==='company_status_history'&&missing(error)){schema.v11=false;break;} throw error; } rows.push(...data); if(data.length<500) break; from+=500; }
+  while(true){ const {data,error}=await db.from(table).select('*').order(table==='audit_log'?'occurred_at':'id').range(from,from+499); if(error){ if(table==='company_status_history'&&missing(error)){schema.v11=false;break;} if(table==='lead_reviews'&&missing(error)){schema.v12=false;break;} throw error; } rows.push(...data); if(data.length<500) break; from+=500; }
   return [table,rows];
  }));
  return Object.fromEntries(results) as Store;
@@ -36,3 +37,7 @@ export async function loadAccess():Promise<AccessData>{
  if(overview.error)throw overview.error; if(events.error)throw events.error;
  return {overview:overview.data as Row[],events:events.data as Row[],available:true};
 }
+// Totais da rede (somente contagens) para a empresa parceira, que não lê os demais cadastros.
+export async function loadNetworkTotals():Promise<Row|undefined>{const{data,error}=await db.rpc('network_totals');if(error){if(missing(error))return undefined;throw error;}const r=Array.isArray(data)?data[0]:undefined;return r?Object.fromEntries(Object.entries(r).map(([k,v])=>[k,Number(v)])):undefined}
+// O parecer não passa pelo bloqueio de somente leitura: autoria e empresa são definidas no servidor.
+export async function saveReview(values:Row){const{error}=await db.from('lead_reviews').insert(values);if(error)throw error;}
